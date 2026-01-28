@@ -1,0 +1,6 @@
+[submodule "ref/kimi-cli"]
+	path = ref/kimi-cli
+	url = https://github.com/MoonshotAI/kimi-cli.git
+[submodule "ref/codex"]
+	path = ref/codex
+	url = https://github.com/openai/codex.git
