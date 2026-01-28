@@ -1,9 +1,8 @@
 # Mental-Sync-CLI: Engineering Reality vs. Narrative Fiction
 
-> "Code is Law, Proof is Reality." —— Web://Reflect 2.8.4 (Fiction)
-> "It works on my machine." —— Developer (Reality)
+> "Code is Law, Proof is Reality."
 
-## 0. 引言：去魅与还原
+## 0. 引言
 
 本项目 **Mental-Sync-CLI (MSC)** 是科幻设定集 **Web://Reflect** 的工程化投影。为了避免概念混淆，本文档旨在明确区分“故事设定”与“现实工程”的边界。
 
