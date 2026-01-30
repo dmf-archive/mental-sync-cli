@@ -17,3 +17,8 @@
   - `key-manager`：负责身份验证和权限管理的代理
   - `meta-organizer`：负责自举优化和认知进化的反思代理
   - `anamnesis`：负责记忆检索和上下文恢复的记忆代理
+- `ref`：参考项目源码与对比分析
+  - `ref/kimi-cli`：Python 智能体框架参考
+  - `ref/codex`：Rust 智能体框架参考
+  - `ref/openclawd`：多技能智能体运行时参考
+  - `docs/ref-compare`：参考项目的功能对比与调研文档

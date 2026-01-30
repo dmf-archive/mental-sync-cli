@@ -4,3 +4,6 @@
 [submodule "ref/codex"]
 	path = ref/codex
 	url = https://github.com/openai/codex.git
+[submodule "ref/openclawd"]
+	path = ref/openclawd
+	url = https://github.com/steipete/clawdis
