@@ -7,3 +7,6 @@
 [submodule "ref/openclawd"]
 	path = ref/openclawd
 	url = https://github.com/steipete/clawdis
+[submodule "ref/nanoclaw"]
+	path = ref/nanoclaw
+	url = https://github.com/gavrielc/nanoclaw

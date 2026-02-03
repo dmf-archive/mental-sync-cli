@@ -1,7 +1,5 @@
 # 常用资源路径与索引
 
-## 外部参考资源
-
 为了方便快速查找常用依赖库的文档或咨询 Deepwiki，以下是其对应的 GitHub Repository 地址：
 
 - `Moonshot/kimi-cli`：Python 智能体框架，提供 TUI 界面和模块化工具系统
@@ -10,15 +8,3 @@
 
 - `ref/kimi-cli/packages/kosong`：LLM provider 抽象层，统一多模型接口
 - `ref/kimi-cli/packages/kaos`：操作系统交互抽象层，支持本地/SSH 远程执行
-
-## 内部设计文档
-
-- `docs/default-agent-identity`：关于初始agent身份的定义与规范
-  - `key-manager`：负责身份验证和权限管理的代理
-  - `meta-organizer`：负责自举优化和认知进化的反思代理
-  - `anamnesis`：负责记忆检索和上下文恢复的记忆代理
-- `ref`：参考项目源码与对比分析
-  - `ref/kimi-cli`：Python 智能体框架参考
-  - `ref/codex`：Rust 智能体框架参考
-  - `ref/openclawd`：多技能智能体运行时参考
-  - `docs/ref-compare`：参考项目的功能对比与调研文档
