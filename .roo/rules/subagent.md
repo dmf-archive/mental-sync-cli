@@ -6,14 +6,14 @@
 
 Sub-agent 是 MSC v3.0 中的原子执行单元。每个 Sub-agent 都是一个独立的 `Agent Core` 实例，运行在受限的沙箱环境中。
 
-- **显式初始化**: 必须通过 `spawn_subagent` 函数显式创建。
+- **显式初始化**: 必须通过 `create_agent` 函数显式创建。
 - **无状态继承**: Sub-agent 不继承 Main Agent 的对话历史（Hot Memory），仅接收任务描述和必要的共享内存。
 - **PFMS 绑定**: 创建时必须指定逻辑模型，由 PFMS 负责物理路由。
 
-## 2. 初始化接口 (Spawn API)
+## 2. 初始化接口 (Create API)
 
 ```python
-def spawn_subagent(
+def create_agent(
     task_description: str,
     model_name: str,
     human_in_loop: bool = False,

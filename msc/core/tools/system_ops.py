@@ -98,6 +98,15 @@ class ExecuteTool(BaseTool):
         """
         Execute a command in a subprocess with NFSS (Native Filesystem Sandbox) constraints.
         """
+        if self.context.gateway:
+            approved = await self.context.gateway.request_permission(
+                agent_id=self.context.agent_id,
+                action="execute",
+                params={"command": command, "cwd": cwd}
+            )
+            if not approved:
+                return {"exit_code": -1, "stdout": "", "stderr": "MSC.SecurityViolation: Permission denied by user."}
+
         try:
             tokens = shlex.split(command)
         except ValueError as e:

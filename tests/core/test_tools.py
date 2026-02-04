@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 # 导入模块
 from msc.core.tools.base import BaseTool, ToolContext
-from msc.core.tools.agent_ops import CreateSubagentTool
+from msc.core.tools.agent_ops import CreateAgentTool
 
 # 1. 基础工具架构测试 (Unit)
 class MockArgs(BaseModel):
@@ -38,14 +38,14 @@ def test_tool_schema_generation(tool_context):
 
 # 2. 模型 B 架构下的子代理创建测试
 @pytest.mark.asyncio
-async def test_create_subagent_coroutine_spawn(tool_context):
+async def test_create_agent_coroutine_spawn(tool_context):
     """
-    验证 create_subagent 工具在模型 B 架构下的行为：
+    验证 create_agent 工具在模型 B 架构下的行为：
     1. 验证它是否返回了正确的 agent_id。
     2. 验证 context 中的 oracle 是否被正确引用（模型 B 核心：共享 Oracle）。
     """
-    # 注意：在 GREEN Phase 之前，CreateSubagentTool 可能还未定义或导入失败
-    tool = CreateSubagentTool(tool_context)
+    # 注意：在 GREEN Phase 之前，CreateAgentTool 可能还未定义或导入失败
+    tool = CreateAgentTool(tool_context)
     
     # 模拟执行
     agent_id = await tool.execute(

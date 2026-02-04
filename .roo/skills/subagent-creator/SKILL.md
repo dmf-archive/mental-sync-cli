@@ -9,11 +9,11 @@ description: "Proactively invoke this skill when needing to spawn a new sub-agen
 
 ## 1. 触发流程 (RED Phase)
 
-在调用 `create_subagent` 工具之前，你**必须**完成以下步骤：
+在调用 `create_agent` 工具之前，你**必须**完成以下步骤：
 
 1. **加载建议**: 调用 `model-select-advice` 技能。
 2. **展示对比**: 向用户展示 OpenRouter 实时价格与能力对比表。
-3. **确认选购**: 明确询问用户：“我建议使用 [Model Name] 来处理此子任务，是否确认下单并创建子代理？”
+3. **确认选购**: 明确询问用户：“我建议使用 [Model Name] 来处理此子任务，是否确认并创建子代理？”
 4. **定义边界**: 明确子代理的 `sandbox_config`（允许访问的路径）。
 
 ## 2. 核心工具参考
@@ -31,7 +31,7 @@ description: "Proactively invoke this skill when needing to spawn a new sub-agen
 
 ## 4. 红灯信号 (Red Flags)
 
-- [ ] **越权创建**: 在未获得用户对具体模型和价格的明确确认前调用 `create_subagent`。
+- [ ] **越权创建**: 在未获得用户对具体模型和价格的明确确认前调用 `create_agent`。
 - [ ] **全量继承**: 将 `shared_memory` 设为 `True` 却未解释原因（默认应为 `False` 以保持隔离）。
 - [ ] **静默失败**: 创建后未向用户返回 `agent_id`。
 - [ ] **通信混乱**: 混淆了 `standard` 和 `high` 优先级的适用场景。
@@ -43,7 +43,7 @@ description: "Proactively invoke this skill when needing to spawn a new sub-agen
 # 2. 智能体向用户汇报：
 # "根据实时数据，DeepSeek-V3 价格最低且支持代码审计。我建议创建子代理处理 src/ 目录的重构。"
 # 3. 用户确认后，智能体执行：
-create_subagent(
+create_agent(
     task_description="Refactor all files in src/ to follow REQ-101",
     model_name="deepseek-chat",
     require_caps=["vision"], # 示例

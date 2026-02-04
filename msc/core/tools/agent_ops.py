@@ -3,7 +3,7 @@ from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field
 from msc.core.tools.base import BaseTool
 
-class CreateSubagentArgs(BaseModel):
+class CreateAgentArgs(BaseModel):
     task_description: str = Field(..., description="Specific instructions for the sub-task")
     model_name: str = Field("auto", description="Logical model name")
     require_caps: Optional[List[str]] = Field(None, description="Mandatory capability tags")
@@ -11,10 +11,10 @@ class CreateSubagentArgs(BaseModel):
     shared_memory: bool = Field(False, description="Whether to allow access to parent's Anamnesis")
     sandbox_config: Optional[Dict[str, Any]] = Field(None, description="Fine-grained sandbox permissions")
 
-class CreateSubagentTool(BaseTool):
-    name = "create_subagent"
+class CreateAgentTool(BaseTool):
+    name = "create_agent"
     description = "Create a new Sub-agent instance and return its unique agent_id."
-    args_schema = CreateSubagentArgs
+    args_schema = CreateAgentArgs
 
     async def execute(
         self,

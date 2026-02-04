@@ -8,6 +8,7 @@ class ToolContext(BaseModel):
     agent_id: str
     workspace_root: str
     oracle: Any
+    gateway: Optional[Any] = None  # OrchestrationGateway reference
     allowed_paths: List[str] = Field(default_factory=list)
     blocked_paths: List[str] = Field(default_factory=list)
 

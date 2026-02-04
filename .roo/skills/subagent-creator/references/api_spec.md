@@ -31,7 +31,7 @@ async def create_subagent(
 
 ## 2. 核心行为准则
 
-1. **HIL 强制性**: `create_subagent` 的调用是一个 Human-In-Loop 事件。
+1. **HIL 强制性**: `create_agent` 的调用是一个 Human-In-Loop 事件。
 2. **前置依赖**: 在调用此函数前，Agent **必须** 已经通过 `model-select-advice` 技能向用户展示了选购建议并获得确认。
 3. **异步解耦**: 函数立即返回 `agent_id`，子代理在独立的沙箱进程中启动。
 4. **通信协议**:
