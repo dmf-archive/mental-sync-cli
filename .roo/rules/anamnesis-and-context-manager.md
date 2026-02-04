@@ -4,7 +4,7 @@
 
 ## 1. 记忆管理范式
 
-MSC v3.0 采用混合记忆架构：
+MSC 采用混合记忆架构：
 
 - **RAG (Retrieval-Augmented Generation)**: 系统根据当前上下文从知识库检索相关片段，以 `Idea Cards` 形式注入。
 - **Notebook (声明式编辑)**: Agent 通过 `memory` 工具主动管理长期记忆。**Notebook 总是由 Agent 自身管理**，用于跨轮次持久化关键决策。

@@ -1,5 +1,5 @@
 ---
-version: "1.0.0"
+version: "0.1.0"
 last_updated: "2026-02-03"
 status: "Draft"
 author: "Chain://Research (Proof of Ineffective Input)"

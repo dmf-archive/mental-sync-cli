@@ -1,4 +1,4 @@
-# MSC Architecture v3.0 (TDD Redesign)
+# MSC Architecture (TDD Redesign)
 
 > "Security by isolation, efficiency by design."
 

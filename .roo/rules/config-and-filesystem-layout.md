@@ -2,7 +2,7 @@
 
 > "Structure is the skeleton of intelligence; hierarchy is the map of sovereignty."
 
-MSC v3.0 采用双层配置架构：**全局 (Global)** 负责身份与基础设施，**项目 (Project)** 负责任务上下文与局部规则。
+MSC 采用双层配置架构：**全局 (Global)** 负责身份与基础设施，**项目 (Project)** 负责任务上下文与局部规则。
 
 ## 1. 目录结构概览
 
@@ -42,7 +42,7 @@ MSC v3.0 采用双层配置架构：**全局 (Global)** 负责身份与基础设
 ### 2.1 `config.yaml` (Global)
 
 ```yaml
-version: "3.0"
+version: "0.1.0"
 default_mode: "architect"
 pfms:
   providers:

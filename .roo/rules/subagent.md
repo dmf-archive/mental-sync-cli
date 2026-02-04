@@ -4,7 +4,7 @@
 
 ## 1. 定义与核心原则
 
-Sub-agent 是 MSC v3.0 中的原子执行单元。每个 Sub-agent 都是一个独立的 `Agent Core` 实例，运行在受限的沙箱环境中。
+Sub-agent 是 MSC 中的原子执行单元。每个 Sub-agent 都是一个独立的 `Agent Core` 实例，运行在受限的沙箱环境中。
 
 - **显式初始化**: 必须通过 `create_agent` 函数显式创建。
 - **无状态继承**: Sub-agent 不继承 Main Agent 的对话历史（Hot Memory），仅接收任务描述和必要的共享内存。

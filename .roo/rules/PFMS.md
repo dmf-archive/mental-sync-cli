@@ -2,7 +2,7 @@
 
 > "In a hostile digital wilderness, sovereignty means never being tied to a single point of failure."
 
-PFMS 是 MSC v3.0 的核心组件，旨在解决“模型能力需求”与“不稳定的 API 供应”之间的矛盾。它通过解耦模型标识符与具体 Provider，实现具备自适应负载均衡能力的认知路由。
+PFMS 是 MSC 的核心组件，旨在解决“模型能力需求”与“不稳定的 API 供应”之间的矛盾。它通过解耦模型标识符与具体 Provider，实现具备自适应负载均衡能力的认知路由。
 
 ## 1. 核心架构
 

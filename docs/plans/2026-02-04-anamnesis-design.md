@@ -2,7 +2,7 @@
 
 ## 1. 目标
 
-实现 MSC v3.0 的认知核心 Anamnesis，支持 8-Section 上下文布局、Lite RAG 潜意识注入以及环境元数据管理。
+实现 MSC 的认知核心 Anamnesis，支持 8-Section 上下文布局、Lite RAG 潜意识注入以及环境元数据管理。
 
 ## 2. 目录结构
 

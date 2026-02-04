@@ -1,6 +1,6 @@
 ---
 title: "Mental-Sync-CLI (MSC) 自主代理操作手册"
-version: "1.0.0"
+version: "0.1.0"
 last_updated: "2026-01-28"
 owner: "Chain://Research"
 ---
