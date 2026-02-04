@@ -37,7 +37,18 @@ MSC v3.0 采用混合记忆架构：
 | `DYNAMIC_METADATA` | VAR | 环境状态快照 |
 | `RAG_CARDS_COLD_MEMORY` | VAR | Lite RAG 检索结果 |
 
-### 2.2 使用说明
+### 2.2 环境元数据 (Section 7: Metadata) 规范
+
+此区域提供 Agent 决策所需的实时上下文，必须包含以下字段：
+
+- **当前时间**: ISO 8601 格式，包含时区。
+- **工作区根目录**: 当前项目的绝对路径。
+- **活动终端**: 正在运行的进程列表及其状态。
+- **资源限制**: 当前沙箱的 CPU/内存配额及剩余量。
+- **Agent 身份**: `agent_id`, `parent_id` (如有), `capabilities` (如 green-tea)。
+- **PFMS 状态**: 当前逻辑模型名称及 Provider 成本元数据。
+
+### 2.3 使用说明
 
 1. **Main Agent**: Notebook 持久化跨 Session，由 Organizer 定期蒸馏。
 2. **Sub-agent**: Notebook 仅作为 Trace 临时字段，随进程回收。

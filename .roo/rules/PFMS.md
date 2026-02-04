@@ -42,6 +42,7 @@ providers:
       - id: "claude-3-5-sonnet-20241022" # 物理 ID，用于 API 调用
         name: "claude-3.5-sonnet"        # 逻辑名称，用于透明负载均衡的实体标签
         context_window: 200000
+        eas: 0.9                         # 触发 summary compress 的上下文百分比阈值
         thinking: "high"                 # 强度控制：none, low, mid, high
         income: 0.000003                 # 价格/1k tokens (手动填写)
         outcome: 0.000015                # 价格/1k tokens (手动填写)
