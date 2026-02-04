@@ -80,9 +80,12 @@ class Session(BaseModel):
             
             history_str = json.dumps(self.history, ensure_ascii=False)
             
+            # We need to pass the history WITHOUT the current user_input if we are re-assembling
+            # But run_loop already appended user_input to self.history.
+            # ContextFactory.build_messages will append history to system prompt.
             prompt = self.context_factory.assemble(
                 task_instruction=user_input,
-                core_base_template=(
+                mode_instruction=(
                     "You are an MSC Agent. Follow the Thought-Action-Observation-Reflection rhythm.\n"
                     "1. Thought: Analyze the current state and plan the next step.\n"
                     "2. Action: Call a tool if necessary.\n"
@@ -93,8 +96,7 @@ class Session(BaseModel):
                 ),
                 notebook_hot_memory="",
                 project_specific_rules=rules,
-                trace_history_part1="",
-                trace_history_part2=f"Conversation History:\n{history_str}",
+                trace_history=self.history[1:], # Skip the first user message as it's task_instruction
                 rag_cards=[]
             )
             

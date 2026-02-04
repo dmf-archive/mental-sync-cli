@@ -35,7 +35,13 @@ class GeminiAdapter:
         parts = [types.Part.from_text(text=prompt)]
         
         if image and self.model_info.has_vision:
-            pass
+            if image.startswith("data:"):
+                res = image[5:].split(";base64,", 1)
+                if len(res) == 2:
+                    media_type, data_b64 = res
+                    import base64
+                    data_bytes = base64.b64decode(data_b64)
+                    parts.append(types.Part.from_bytes(data=data_bytes, mime_type=media_type))
             
         contents.append(types.Content(role="user", parts=parts))
 

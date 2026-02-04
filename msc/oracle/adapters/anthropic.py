@@ -26,7 +26,18 @@ class AnthropicAdapter:
     async def generate(self, prompt: str, image: str | None = None) -> str:
         content = []
         if image and self.model_info.has_vision:
-            pass
+            if image.startswith("data:"):
+                res = image[5:].split(";base64,", 1)
+                if len(res) == 2:
+                    media_type, data = res
+                    content.append({
+                        "type": "image",
+                        "source": {
+                            "type": "base64",
+                            "media_type": media_type,
+                            "data": data,
+                        },
+                    })
         
         content.append({"type": "text", "text": prompt})
 

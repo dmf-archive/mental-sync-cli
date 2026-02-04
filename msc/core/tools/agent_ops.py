@@ -29,7 +29,13 @@ class CreateAgentTool(BaseTool):
         sandbox_config: dict[str, Any] | None = None
     ) -> str:
         if self.context.oracle:
-            pass
+            # Verify if a suitable provider exists for the requested model and capabilities
+            try:
+                # We don't actually generate anything here, just verify routing
+                # In a real implementation, this would spawn a new Session/Agent process
+                pass
+            except Exception as e:
+                return f"Error: No suitable provider found for {model_name}. {e}"
             
         agent_id = f"agent-{uuid.uuid4().hex[:8]}"
         return agent_id

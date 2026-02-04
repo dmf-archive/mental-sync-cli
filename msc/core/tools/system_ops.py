@@ -75,7 +75,11 @@ class WindowsSandbox(SandboxProvider):
             $pinfo.RedirectStandardError = $true;
             try {{
                 $process = [System.Diagnostics.Process]::Start($pinfo);
+                $stdout = $process.StandardOutput.ReadToEnd();
+                $stderr = $process.StandardError.ReadToEnd();
                 $process.WaitForExit();
+                Write-Host $stdout -NoNewline;
+                [Console]::Error.Write($stderr);
                 exit $process.ExitCode;
             }} catch {{
                 exit 1;

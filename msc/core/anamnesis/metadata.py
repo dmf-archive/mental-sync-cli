@@ -15,13 +15,29 @@ class MetadataProvider:
         self.provider_cost = cost
 
     def collect(self) -> SessionMetadata:
+        active_terminals = []
+        if os.name == "nt":
+            import subprocess
+            try:
+                output = subprocess.check_output(["tasklist"], text=True)
+                if "pwsh.exe" in output:
+                    active_terminals.append("pwsh")
+                if "cmd.exe" in output:
+                    active_terminals.append("cmd")
+            except Exception:
+                pass
+        
+        capabilities = ["fs_read", "fs_write", "execute"]
+        if self.model_name:
+            capabilities.append("llm_inference")
+
         return SessionMetadata(
             agent_id=self.agent_id,
             start_time=datetime.now(),
             workspace_root=os.getcwd(),
             model_name=self.model_name,
             provider_cost=self.provider_cost,
-            active_terminals=[],
-            resource_limits={},
-            capabilities=[]
+            active_terminals=active_terminals,
+            resource_limits={"cpu_count": os.cpu_count() or 1},
+            capabilities=capabilities
         )
