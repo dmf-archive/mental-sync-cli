@@ -3,28 +3,25 @@ import json
 import re
 import uuid
 from enum import Enum
-from typing import Any, Dict, List, Optional, Union
-from pydantic import BaseModel, Field, ConfigDict
+from typing import Any
+
+from pydantic import BaseModel, ConfigDict, Field
 
 from msc.core.anamnesis.context import ContextFactory
-from msc.core.anamnesis.types import AnamnesisConfig, SessionMetadata
-from msc.core.anamnesis.metadata import MetadataProvider
 from msc.core.anamnesis.discover import RulesDiscoverer
+from msc.core.anamnesis.metadata import MetadataProvider
+from msc.core.anamnesis.types import AnamnesisConfig
+
 
 class ToolCall(BaseModel):
     name: str
-    parameters: Dict[str, Any]
+    parameters: dict[str, Any]
     id: str = Field(default_factory=lambda: f"call_{uuid.uuid4().hex[:8]}")
 
 class ToolParser:
     @staticmethod
-    def parse(text: str) -> List[ToolCall]:
-        """
-        解析模型输出中的工具调用。
-        支持格式: {"name": "execute", "parameters": {"command": "..."}}
-        """
+    def parse(text: str) -> list[ToolCall]:
         tool_calls = []
-        # 简单的正则匹配 JSON 块
         pattern = r'\{"name":\s*"[^"]+",\s*"parameters":\s*\{.*\}\}'
         matches = re.finditer(pattern, text, re.DOTALL)
         
@@ -51,16 +48,15 @@ class Session(BaseModel):
 
     session_id: str
     oracle: Any
-    gateway: Any  # OrchestrationGateway reference
+    gateway: Any
     workspace_root: str
     status: SessionStatus = SessionStatus.IDLE
-    agent_registry: Dict[str, Any] = Field(default_factory=dict)
-    history: List[Dict[str, Any]] = Field(default_factory=list)
+    agent_registry: dict[str, Any] = Field(default_factory=dict)
+    history: list[dict[str, Any]] = Field(default_factory=list)
     
-    # 核心组件 (延迟初始化)
-    context_factory: Optional[ContextFactory] = None
-    metadata_provider: Optional[MetadataProvider] = None
-    rules_discoverer: Optional[RulesDiscoverer] = None
+    context_factory: ContextFactory | None = None
+    metadata_provider: MetadataProvider | None = None
+    rules_discoverer: RulesDiscoverer | None = None
 
     async def start(self):
         self.status = SessionStatus.RUNNING
@@ -75,19 +71,13 @@ class Session(BaseModel):
         self.status = SessionStatus.COMPLETED
 
     async def run_loop(self, user_input: str):
-        """
-        自主认知循环 (Cognitive Loop)
-        """
         self.history.append({"role": "user", "content": user_input})
         
         while self.status == SessionStatus.RUNNING:
-            # 1. 组装上下文
             rules = self.rules_discoverer.scan()
             metadata = self.metadata_provider.collect()
             self.context_factory.metadata = metadata
             
-            # 关键修复：使用 json.dumps 确保 history 被正确序列化为字符串
-            # 并且在 prompt 中明确指示模型如何处理 history
             history_str = json.dumps(self.history, ensure_ascii=False)
             
             prompt = self.context_factory.assemble(
@@ -108,7 +98,6 @@ class Session(BaseModel):
                 rag_cards=[]
             )
             
-            # 2. 调用 Oracle
             try:
                 target_model = metadata.model_name or "gemini-2.5-flash-lite"
                 print(f"\n[DEBUG] Sending Prompt to Oracle ({target_model}):\n{prompt[:500]}...\n")
@@ -125,20 +114,16 @@ class Session(BaseModel):
                 })
                 break
             
-            # 推送日志到桥接层
             await self.gateway.bridge.send_message({
                 "method": "msc/log",
                 "params": {"agent_id": "main-agent", "content": response_text, "type": "thought"}
             })
             
-            # 3. 解析工具调用
             tool_calls = ToolParser.parse(response_text)
             print(f"[DEBUG] Parsed Tool Calls: {tool_calls}")
             
-            # 关键修复：必须记录模型自身的回复，否则上下文会断裂导致死循环
             self.history.append({"role": "assistant", "content": response_text})
 
-            # 幂等性校验：检测重复动作
             last_assistant_msgs = [h for h in self.history[:-1] if h.get("role") == "assistant"]
             if last_assistant_msgs and tool_calls:
                 last_calls = ToolParser.parse(last_assistant_msgs[-1]["content"])
@@ -156,21 +141,19 @@ class Session(BaseModel):
                 break
 
             if not tool_calls:
-                # 没有工具调用且没有 FINISH，可能是在思考或卡住了
                 print("[Session] No tool calls and no FINISH signal. Continuing for reflection...")
                 
-            # 4. 执行工具 (由工具内部处理 HIL，避免双重审批死锁)
             for call in tool_calls:
                 print(f"[Session] Executing tool: {call.name}...")
                 if call.name == "execute":
-                    from msc.core.tools.system_ops import ExecuteTool
                     from msc.core.tools.base import ToolContext
+                    from msc.core.tools.system_ops import ExecuteTool
                     
                     tool_context = ToolContext(
                         agent_id="main-agent",
                         workspace_root=self.workspace_root,
                         oracle=self.oracle,
-                        gateway=self.gateway, # 传递网关引用，让工具自主请求权限
+                        gateway=self.gateway,
                         allowed_paths=[self.workspace_root]
                     )
                     tool = ExecuteTool(tool_context)
@@ -190,10 +173,10 @@ class Session(BaseModel):
 class OrchestrationGateway:
     def __init__(self, bridge: Any):
         self.bridge = bridge
-        self.pending_approvals: Dict[str, asyncio.Event] = {}
-        self.approval_results: Dict[str, bool] = {}
+        self.pending_approvals: dict[str, asyncio.Event] = {}
+        self.approval_results: dict[str, bool] = {}
 
-    async def request_permission(self, agent_id: str, action: str, params: Dict[str, Any]) -> bool:
+    async def request_permission(self, agent_id: str, action: str, params: dict[str, Any]) -> bool:
         request_id = str(uuid.uuid4())
         event = asyncio.Event()
         self.pending_approvals[request_id] = event
@@ -214,7 +197,7 @@ class OrchestrationGateway:
         del self.pending_approvals[request_id]
         return result
 
-    async def handle_bridge_message(self, message: Dict[str, Any]):
+    async def handle_bridge_message(self, message: dict[str, Any]):
         method = message.get("method")
         params = message.get("params", {})
         

@@ -1,10 +1,11 @@
-import pytest
 import asyncio
-from datetime import datetime
-from unittest.mock import MagicMock, AsyncMock
+from unittest.mock import AsyncMock, MagicMock
+
+import pytest
 
 # 假设我们将 OG 核心逻辑放在 msc.core.og 中
-from msc.core.og import Session, SessionStatus, OrchestrationGateway
+from msc.core.og import OrchestrationGateway, Session, SessionStatus
+
 
 @pytest.mark.asyncio
 async def test_session_lifecycle_management():

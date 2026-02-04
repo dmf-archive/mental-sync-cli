@@ -1,5 +1,7 @@
-import pytest
 import asyncio
+
+import pytest
+
 from msc.oracle import Oracle, create_adapter
 
 # 本地转发器配置

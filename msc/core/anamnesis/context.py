@@ -1,6 +1,8 @@
 import copy
-from typing import List, Dict, Any, Optional
-from msc.core.anamnesis.types import AnamnesisConfig, SessionMetadata, KnowledgeCard
+from typing import Any
+
+from msc.core.anamnesis.types import AnamnesisConfig, KnowledgeCard, SessionMetadata
+
 
 class ContextFactory:
     def __init__(self, config: AnamnesisConfig, metadata: SessionMetadata):
@@ -10,7 +12,7 @@ class ContextFactory:
     def should_trigger_rag(self, step: int) -> bool:
         return step > 0 and step % self.config.trigger_interval == 0
 
-    def _normalize_history(self, history: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    def _normalize_history(self, history: list[dict[str, Any]]) -> list[dict[str, Any]]:
         if not history:
             return []
         
@@ -36,7 +38,7 @@ class ContextFactory:
             f"- **Logical Model**: {self.metadata.model_name}"
         )
 
-    def _render_idea_cards(self, rag_cards: List[KnowledgeCard]) -> str:
+    def _render_idea_cards(self, rag_cards: list[KnowledgeCard]) -> str:
         cards_content = "\n\n".join([f"#### {card.title}\n{card.content}" for card in rag_cards])
         return (
             f"## Idea Cards\n\n"
@@ -49,14 +51,14 @@ class ContextFactory:
         task_instruction: str,
         mode_instruction: str,
         notebook_hot_memory: str,
-        project_specific_rules: Dict[str, str],
-        trace_history: List[Dict[str, Any]],
-        rag_cards: List[KnowledgeCard],
+        project_specific_rules: dict[str, str],
+        trace_history: list[dict[str, Any]],
+        rag_cards: list[KnowledgeCard],
         available_mcp_description: str = "",
         available_skills_description: str = "",
         mode_list: str = "",
         model_list: str = ""
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         rules_content = "\n\n".join([f"#### {name}\n{content}" for name, content in project_specific_rules.items()])
         
         system_content = f"""{task_instruction}

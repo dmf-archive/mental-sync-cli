@@ -1,6 +1,6 @@
-import pytest
 from msc.core.anamnesis.metadata import MetadataProvider
 from msc.core.anamnesis.types import SessionMetadata
+
 
 def test_metadata_provider_collects_real_data():
     provider = MetadataProvider(agent_id="test-agent")

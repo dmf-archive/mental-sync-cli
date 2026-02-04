@@ -1,24 +1,24 @@
 import re
-import yaml
 from pathlib import Path
-from typing import List, Dict, Set, Optional
+
+import yaml
+
 from msc.core.anamnesis.types import AnamnesisConfig, KnowledgeCard
 
+
 class LiteRAG:
-    def __init__(self, config: AnamnesisConfig, project_root: Optional[str] = None, global_root: Optional[str] = None):
+    def __init__(self, config: AnamnesisConfig, project_root: str | None = None, global_root: str | None = None):
         self.config = config
         self.project_root = Path(project_root) if project_root else Path.cwd()
-        # 默认全局路径，实际应从环境变量或配置获取
         self.global_root = Path(global_root) if global_root else Path.home() / ".msc"
 
-    def search(self, keywords: List[str]) -> List[KnowledgeCard]:
+    def search(self, keywords: list[str]) -> list[KnowledgeCard]:
         if not keywords:
             return []
 
-        results: List[KnowledgeCard] = []
-        seen_titles: Set[str] = set()
+        results: list[KnowledgeCard] = []
+        seen_titles: set[str] = set()
 
-        # 按照 search_scope 顺序检索
         for scope in self.config.search_scope:
             if len(results) >= self.config.max_cards_inject:
                 break
@@ -35,7 +35,6 @@ class LiteRAG:
                     
                 try:
                     content = card_file.read_text(encoding="utf-8")
-                    # 简单的关键词匹配 (Grep 模拟)
                     if any(re.search(re.escape(kw), content, re.IGNORECASE) for kw in keywords):
                         card = self._parse_card(content, str(card_file))
                         if card.title not in seen_titles:
@@ -46,19 +45,15 @@ class LiteRAG:
 
         return results[:self.config.max_cards_inject]
 
-    def _extract_keywords_heuristic(self, context: str) -> List[str]:
+    def _extract_keywords_heuristic(self, context: str) -> list[str]:
         keywords = set()
-        # 1. 引号内的词
         keywords.update(re.findall(r'"([^"]+)"', context))
-        # 2. 反引号内的词
         keywords.update(re.findall(r'`([^`]+)`', context))
-        # 3. 大写缩写或驼峰命名 (简单启发式)
         keywords.update(re.findall(r'\b[A-Z][a-zA-Z0-9-]{2,}\b', context))
         
         return list(keywords)
 
     def _parse_card(self, content: str, path: str) -> KnowledgeCard:
-        # 简单的 Frontmatter 解析
         frontmatter_match = re.match(r'^---\s*\n(.*?)\n---\s*\n(.*)$', content, re.DOTALL)
         if frontmatter_match:
             yaml_content, body = frontmatter_match.groups()

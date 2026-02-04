@@ -1,19 +1,16 @@
-import json
-from typing import List, Optional, Any
+from typing import Any
+
 from openai import AsyncOpenAI
-from msc.oracle import ModelCapability
+
 
 class OpenAIAdapter:
-    """
-    适配 OpenAI 兼容格式的 Provider (包括 DeepSeek, Groq, Ollama)。
-    """
     def __init__(
         self, 
         name: str, 
         model: str, 
         api_key: str, 
-        base_url: Optional[str] = None,
-        capabilities: List[str] = None,
+        base_url: str | None = None,
+        capabilities: list[str] = None,
         has_vision: bool = False,
         has_thinking: bool = False,
         **kwargs: Any
@@ -24,8 +21,8 @@ class OpenAIAdapter:
         self.model_info = MagicModelInfo(has_vision, has_thinking)
         self.client = AsyncOpenAI(api_key=api_key, base_url=base_url, **kwargs)
 
-    async def generate(self, prompt: str, image: Optional[str] = None) -> str:
-        content: List[Dict[str, Any]] = [{"type": "text", "text": prompt}]
+    async def generate(self, prompt: str, image: str | None = None) -> str:
+        content: list[dict[str, Any]] = [{"type": "text", "text": prompt}]
         if image and self.model_info.has_vision:
             content.append({
                 "type": "image_url",

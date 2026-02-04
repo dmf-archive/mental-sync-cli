@@ -3,101 +3,107 @@ import os
 import platform
 import shlex
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List, Optional
+from typing import Any
+
 from pydantic import BaseModel, Field
+
 from msc.core.tools.base import BaseTool
+
 
 class SandboxProvider(ABC):
     @abstractmethod
-    def wrap_command(self, command: List[str], allowed_paths: List[str], blocked_paths: List[str]) -> List[str]:
+    def wrap_command(self, command: list[str], allowed_paths: list[str], blocked_paths: list[str]) -> list[str]:
         pass
 
 class NoSandboxProvider(SandboxProvider):
-    def wrap_command(self, command: List[str], allowed_paths: List[str], blocked_paths: List[str]) -> List[str]:
+    def wrap_command(self, command: list[str], allowed_paths: list[str], blocked_paths: list[str]) -> list[str]:
         return command
 
 class MacOSSandbox(SandboxProvider):
-    def wrap_command(self, command: List[str], allowed_paths: List[str], blocked_paths: List[str]) -> List[str]:
+    def wrap_command(self, command: list[str], allowed_paths: list[str], blocked_paths: list[str]) -> list[str]:
         sb_profile = ["(version 1)", "(deny default)", "(allow process-exec)", "(allow network-outbound)"]
         for path in allowed_paths:
             abs_path = os.path.abspath(path)
             sb_profile.append(f'(allow file-read* file-write* (subpath "{abs_path}"))')
-        # Basic system libs
         sb_profile.extend(['(allow file-read* (subpath "/usr/lib"))', '(allow file-read* (subpath "/usr/bin"))'])
         profile_str = " ".join(sb_profile)
         return ["sandbox-exec", "-p", profile_str] + command
 
 class LinuxSandbox(SandboxProvider):
-    def wrap_command(self, command: List[str], allowed_paths: List[str], blocked_paths: List[str]) -> List[str]:
-        # Use bubblewrap (bwrap) as a reliable CLI wrapper for Landlock/Namespaces
-        # It's widely available and handles the complexity of mounting
+    def wrap_command(self, command: list[str], allowed_paths: list[str], blocked_paths: list[str]) -> list[str]:
         bwrap_cmd = [
             "bwrap",
-            "--ro-bind", "/", "/",  # Default read-only root
-            "--dev", "/dev",        # Essential devices
-            "--proc", "/proc",      # Process info
-            "--tmpfs", "/tmp",      # Private tmp
-            "--unshare-all",        # Isolate network, IPC, UTS, etc.
+            "--ro-bind", "/", "/",
+            "--dev", "/dev",
+            "--proc", "/proc",
+            "--tmpfs", "/tmp",
+            "--unshare-all",
             "--hostname", "msc-sandbox"
         ]
-        
-        # Bind allowed paths as read-write
         for path in allowed_paths:
             abs_path = os.path.abspath(path)
             if os.path.exists(abs_path):
                 bwrap_cmd.extend(["--bind", abs_path, abs_path])
-        
-        # Explicitly block paths by masking them with empty directories or symlinks to nowhere
-        # Note: bwrap doesn't have a direct 'deny' but we can over-mount
         for path in blocked_paths:
             abs_path = os.path.abspath(path)
             bwrap_cmd.extend(["--tmpfs", abs_path])
-            
         return bwrap_cmd + command
 
 class WindowsSandbox(SandboxProvider):
-    def wrap_command(self, command: List[str], allowed_paths: List[str], blocked_paths: List[str]) -> List[str]:
-        # Windows sandboxing is complex to implement via CLI wrapping without external tools like 'Sandboxie' or 'AppContainer'.
-        # However, we can use 'runas' with a restricted user or a helper that uses Job Objects.
-        # For this implementation, we'll use a PowerShell wrapper that simulates basic Job Object restrictions
-        # and relies on the fact that we've switched to create_subprocess_exec to prevent shell injection.
-        
-        # In a production MSC environment, this would call a C++ helper 'msc-sandbox-win.exe'
-        # that uses CreateRestrictedToken and AssignProcessToJobObject.
+    def wrap_command(self, command: list[str], allowed_paths: list[str], blocked_paths: list[str]) -> list[str]:
+        acl_commands = []
+        for path in blocked_paths:
+            abs_path = os.path.abspath(path)
+            if os.path.exists(abs_path):
+                acl_commands.append(f'icacls "{abs_path}" /deny "${{env:USERNAME}}:(OI)(CI)(R,W,D)" /Q')
+
+        cmd_exe = command[0]
+        cmd_args = shlex.join(command[1:]) if len(command) > 1 else ""
+        cmd_args_escaped = cmd_args.replace('"', '`"')
         
         ps_wrapper = [
             "powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command",
-            "$job = New-Object System.Management.Automation.Job; " +
-            "Start-Process -FilePath " + command[0] + " -ArgumentList " +
-            (shlex.join(command[1:]) if len(command) > 1 else "''") + " -Wait"
+            f"""
+            $OutputEncoding = [System.Text.Encoding]::UTF8;
+            {"; ".join(acl_commands) if acl_commands else " # No ACLs"};
+            $pinfo = New-Object System.Diagnostics.ProcessStartInfo;
+            $pinfo.FileName = "{cmd_exe}";
+            $pinfo.Arguments = "{cmd_args_escaped}";
+            $pinfo.UseShellExecute = $false;
+            $pinfo.CreateNoWindow = $true;
+            $pinfo.RedirectStandardOutput = $true;
+            $pinfo.RedirectStandardError = $true;
+            try {{
+                $process = [System.Diagnostics.Process]::Start($pinfo);
+                $process.WaitForExit();
+                exit $process.ExitCode;
+            }} catch {{
+                exit 1;
+            }}
+            """
         ]
-        # Note: This is a placeholder for the actual Job Object C++ implementation.
-        # The key security improvement is already achieved by using create_subprocess_exec.
-        return command
+        return ps_wrapper
 
 def get_sandbox_provider() -> SandboxProvider:
     sys = platform.system()
     if sys == "Darwin":
         return MacOSSandbox()
-    elif sys == "Linux":
+    if sys == "Linux":
         return LinuxSandbox()
-    elif sys == "Windows":
+    if sys == "Windows":
         return WindowsSandbox()
     return NoSandboxProvider()
 
 class ExecuteArgs(BaseModel):
     command: str = Field(..., description="The shell command to execute")
-    cwd: Optional[str] = Field(None, description="Working directory for the command")
+    cwd: str | None = Field(None, description="Working directory for the command")
 
 class ExecuteTool(BaseTool):
     name = "execute"
     description = "Execute a system command in a sandboxed subprocess."
     args_schema = ExecuteArgs
 
-    async def execute(self, command: str, cwd: Optional[str] = None) -> Dict[str, Any]:
-        """
-        Execute a command in a subprocess with NFSS (Native Filesystem Sandbox) constraints.
-        """
+    async def execute(self, command: str, cwd: str | None = None) -> dict[str, Any]:
         if self.context.gateway:
             approved = await self.context.gateway.request_permission(
                 agent_id=self.context.agent_id,
@@ -115,10 +121,19 @@ class ExecuteTool(BaseTool):
         if not tokens:
             return {"exit_code": 1, "stdout": "", "stderr": "MSC.SecurityViolation: Empty command."}
 
-        # NFSS Phase 1: Logical Pre-flight Check (Optional but good for UX)
-        # ... (Keeping the logic but using it to decide whether to even try)
+        def normalize_path(p):
+            return os.path.normpath(os.path.abspath(p)).lower()
 
-        # NFSS Phase 2: Native Sandbox Wrapping
+        cmd_full_norm = " ".join(tokens).lower()
+        for blocked in self.context.blocked_paths:
+            blocked_norm = normalize_path(blocked)
+            if blocked_norm in cmd_full_norm or blocked.lower() in cmd_full_norm:
+                return {
+                    "exit_code": 1,
+                    "stdout": "",
+                    "stderr": f"MSC.SecurityViolation: Access to blocked path '{blocked}' is forbidden."
+                }
+
         provider = get_sandbox_provider()
         final_tokens = provider.wrap_command(
             tokens,
@@ -127,16 +142,12 @@ class ExecuteTool(BaseTool):
         )
 
         try:
-            # Use create_subprocess_exec to avoid shell injection
-            # On Windows, we need to handle executable resolution manually for some commands
-            executable = final_tokens[0]
-            
             process = await asyncio.create_subprocess_exec(
                 *final_tokens,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
                 cwd=cwd or self.context.workspace_root,
-                env=os.environ.copy() # In production, we should clean this
+                env=os.environ.copy()
             )
 
             stdout, stderr = await process.communicate()

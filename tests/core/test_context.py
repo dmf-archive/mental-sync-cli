@@ -1,7 +1,8 @@
-import pytest
 from datetime import datetime
+
 from msc.core.anamnesis.context import ContextFactory
-from msc.core.anamnesis.types import AnamnesisConfig, SessionMetadata, KnowledgeCard
+from msc.core.anamnesis.types import AnamnesisConfig, KnowledgeCard, SessionMetadata
+
 
 def test_context_factory_assembles_v3_standard():
     config = AnamnesisConfig()

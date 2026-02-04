@@ -1,5 +1,7 @@
-from typing import List, Optional, Protocol, runtime_checkable, Any
+from typing import Any, List, Optional, Protocol, runtime_checkable
+
 from pydantic import BaseModel
+
 
 @runtime_checkable
 class ModelCapability(Protocol):
@@ -10,12 +12,12 @@ class ModelCapability(Protocol):
 class ChatProvider(Protocol):
     name: str
     model_name: str
-    capabilities: List[str]
+    capabilities: list[str]
     model_info: ModelCapability
-    async def generate(self, prompt: str, image: Optional[str] = None) -> str: ...
+    async def generate(self, prompt: str, image: str | None = None) -> str: ...
 
 class Oracle:
-    def __init__(self, providers: List[ChatProvider]):
+    def __init__(self, providers: list[ChatProvider]):
         """
         Oracle 核心类，负责 Model/Provider Free 的路由与故障转移。
         这里的 providers 列表顺序即为隐式优先级顺序。
@@ -26,8 +28,8 @@ class Oracle:
         self, 
         model_name: str, 
         prompt: str, 
-        image: Optional[str] = None,
-        require_caps: Optional[List[str]] = None,
+        image: str | None = None,
+        require_caps: list[str] | None = None,
         require_thinking: bool = False
     ) -> str:
         # 1. 筛选符合条件的候选者
@@ -72,17 +74,16 @@ def create_adapter(provider_type: str, **kwargs: Any) -> ChatProvider:
     if provider_type == "openai":
         from msc.oracle.adapters.openai import OpenAIAdapter
         return OpenAIAdapter(**kwargs)
-    elif provider_type == "anthropic":
+    if provider_type == "anthropic":
         from msc.oracle.adapters.anthropic import AnthropicAdapter
         return AnthropicAdapter(**kwargs)
-    elif provider_type == "gemini":
+    if provider_type == "gemini":
         from msc.oracle.adapters.gemini import GeminiAdapter
         return GeminiAdapter(**kwargs)
-    elif provider_type == "ollama":
+    if provider_type == "ollama":
         from msc.oracle.adapters.ollama import OllamaAdapter
         return OllamaAdapter(**kwargs)
-    elif provider_type == "openrouter":
+    if provider_type == "openrouter":
         from msc.oracle.adapters.openrouter import OpenRouterAdapter
         return OpenRouterAdapter(**kwargs)
-    else:
-        raise ValueError(f"Unsupported provider type: {provider_type}")
+    raise ValueError(f"Unsupported provider type: {provider_type}")

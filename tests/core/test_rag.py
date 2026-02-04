@@ -1,8 +1,9 @@
-import pytest
 import tempfile
 from pathlib import Path
+
 from msc.core.anamnesis.rag import LiteRAG
-from msc.core.anamnesis.types import AnamnesisConfig, KnowledgeCard
+from msc.core.anamnesis.types import AnamnesisConfig
+
 
 def test_heuristic_keyword_extraction():
     rag = LiteRAG(config=AnamnesisConfig())

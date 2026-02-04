@@ -1,9 +1,8 @@
-import pytest
-import yaml
-import os
-from typing import List, Protocol, Optional, Dict, Any
+from typing import Protocol
 from unittest.mock import AsyncMock, MagicMock, patch
-from pydantic import BaseModel, ValidationError
+
+import pytest
+from pydantic import BaseModel
 
 # --- 1. 核心协议与数据模型 (模拟生产环境) ---
 
@@ -14,16 +13,16 @@ class ModelCapability(BaseModel):
 class ChatProvider(Protocol):
     name: str
     model_name: str
-    capabilities: List[str]
+    capabilities: list[str]
     model_info: ModelCapability
-    async def generate(self, prompt: str, image: Optional[str] = None) -> str: ...
+    async def generate(self, prompt: str, image: str | None = None) -> str: ...
 
 # --- 2. 完备的 Mock 构造器 ---
 
 def create_complex_mock_provider(
     name: str, 
     model_name: str, 
-    caps: List[str], 
+    caps: list[str], 
     has_vision: bool = False,
     has_thinking: bool = False,
     response: str = "Default Assistant Message"

@@ -1,13 +1,10 @@
-import yaml
-from typing import Any, Dict
-from pydantic import BaseModel, Field
+from typing import Any
 
-def load_config_safely(yaml_str: str) -> Dict[str, Any]:
-    """
-    使用 SafeLoader 安全加载 YAML 配置，防止任意代码执行 (ACE)。
-    """
+import yaml
+
+
+def load_config_safely(yaml_str: str) -> dict[str, Any]:
     try:
-        # 核心安全点：显式使用 SafeLoader
         data = yaml.load(yaml_str, Loader=yaml.SafeLoader)
         if not isinstance(data, dict):
             raise ValueError("Invalid configuration format: expected a dictionary")

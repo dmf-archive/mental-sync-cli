@@ -1,8 +1,8 @@
-import pytest
-import os
 import tempfile
 from pathlib import Path
+
 from msc.core.anamnesis.discover import RulesDiscoverer
+
 
 def test_discover_finds_roo_rules():
     with tempfile.TemporaryDirectory() as tmpdir:

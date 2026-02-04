@@ -1,11 +1,13 @@
+from unittest.mock import MagicMock
+
 import pytest
 from pydantic import BaseModel, Field
-from typing import Optional, List, Any, Dict
-from unittest.mock import AsyncMock, MagicMock
+
+from msc.core.tools.agent_ops import CreateAgentTool
 
 # 导入模块
 from msc.core.tools.base import BaseTool, ToolContext
-from msc.core.tools.agent_ops import CreateAgentTool
+
 
 # 1. 基础工具架构测试 (Unit)
 class MockArgs(BaseModel):

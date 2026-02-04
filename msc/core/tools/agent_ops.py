@@ -1,15 +1,18 @@
 import uuid
-from typing import Any, Dict, List, Optional
+from typing import Any
+
 from pydantic import BaseModel, Field
+
 from msc.core.tools.base import BaseTool
+
 
 class CreateAgentArgs(BaseModel):
     task_description: str = Field(..., description="Specific instructions for the sub-task")
     model_name: str = Field("auto", description="Logical model name")
-    require_caps: Optional[List[str]] = Field(None, description="Mandatory capability tags")
+    require_caps: list[str] | None = Field(None, description="Mandatory capability tags")
     require_thinking: bool = Field(False, description="Whether CoT reasoning is mandatory")
     shared_memory: bool = Field(False, description="Whether to allow access to parent's Anamnesis")
-    sandbox_config: Optional[Dict[str, Any]] = Field(None, description="Fine-grained sandbox permissions")
+    sandbox_config: dict[str, Any] | None = Field(None, description="Fine-grained sandbox permissions")
 
 class CreateAgentTool(BaseTool):
     name = "create_agent"
@@ -20,16 +23,12 @@ class CreateAgentTool(BaseTool):
         self,
         task_description: str,
         model_name: str = "auto",
-        require_caps: Optional[List[str]] = None,
+        require_caps: list[str] | None = None,
         require_thinking: bool = False,
         shared_memory: bool = False,
-        sandbox_config: Optional[Dict[str, Any]] = None
+        sandbox_config: dict[str, Any] | None = None
     ) -> str:
-        # PFMS Integration: Use shared Oracle for model routing
-        # In model B, the Oracle instance is shared across the MSC instance
         if self.context.oracle:
-            # Logic for model selection/routing would go here
-            # For now, we just ensure the oracle is accessible
             pass
             
         agent_id = f"agent-{uuid.uuid4().hex[:8]}"

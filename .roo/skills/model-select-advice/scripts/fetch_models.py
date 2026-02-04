@@ -1,4 +1,10 @@
-import urllib.request, json, re, yaml, datetime
+import datetime
+import json
+import re
+import urllib.request
+
+import yaml
+
 
 def fetch_and_format():
     url = 'https://openrouter.ai/api/v1/models'
@@ -52,7 +58,7 @@ def fetch_and_format():
             
         print(yaml.dump(output_data, allow_unicode=True, sort_keys=False))
         
-    except Exception as e:
+    except Exception:
         import traceback
         traceback.print_exc()
 
