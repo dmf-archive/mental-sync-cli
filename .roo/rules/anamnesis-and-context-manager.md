@@ -6,57 +6,40 @@
 
 MSC v3.0 采用混合记忆架构：
 
-- **RAG (Retrieval-Augmented Generation)**: 系统根据当前上下文从知识库检索相关片段。
-- **Notebook (声明式编辑)**: Agent 通过 `memory_add/replace/del` 工具主动管理长期记忆。**Notebook 总是由 Agent 自身管理**。
+- **RAG (Retrieval-Augmented Generation)**: 系统根据当前上下文从知识库检索相关片段，以 `Idea Cards` 形式注入。
+- **Notebook (声明式编辑)**: Agent 通过 `memory` 工具主动管理长期记忆。**Notebook 总是由 Agent 自身管理**，用于跨轮次持久化关键决策。
 
-## 2. 认知上下文布局 (8-Section Layout)
+## 2. 认知上下文布局 (Semantic Layout)
 
-为对抗注意力稀释，System Prompt 采用标准化结构：
+为对抗注意力稀释并优化推理效率，System Prompt 采用语义化标题结构，而非硬编码的 Section 编号。
 
-| Section | 内容 | 更新频率 |
+### 2.1 核心布局结构
+
+| 模块 | 占位符 | 说明 |
 | :--- | :--- | :--- |
-| 1. Task Instruction | 用户或父 Agent 分配的具体指令 | 每任务 |
-| 2. Core Base Template | 工具调用规范与行为准则 | 全局固定 |
-| 3. Notebook (Hot Memory) | Agent 自我管理的持久化记忆 | 低频 |
-| 4. Project Rules (AGENTS.md) | 递归读取的项目规则集 | 中频 |
-| 5. Trace History (Part 1) | 历史对话（缓存优化） | 每轮+1 |
-| 6. Trace History (Part 2) | 最新用户输入 | 每轮 |
-| 7. Metadata | 环境元数据（时间、目录树、系统状态） | 每轮 |
-| 8. RAG Cards (Cold Memory) | Lite RAG 检索的知识卡 | 每 N step |
+| **Task Instruction** | `{{TASK_INSTRUCTION}}` | 当前任务的具体指令 |
+| **Mode Instruction** | `{{mode_instruction}}` | 身份定义（如 Architect, Code） |
+| **Tool Guidelines** | (静态内容) | 工具调用准则与 JSON Sample |
+| **Capabilities** | (静态内容) | 系统权限与环境感知说明 |
+| **MCP/Skills/Modes** | `{{AVAILABLE_...}}` | 动态加载的工具扩展与模式列表 |
+| **Notebook** | `{{NOTEBOOK_HOT_MEMORY}}` | 长期备忘录（Hot Memory） |
+| **Project Rules** | `{{PROJECT_SPECIFIC_RULES}}` | 自动发现的项目特定规则 |
+| **Trace History** | `{{TRACE_HISTORY}}` | 完整对话历史，用于确保行动连贯 |
+| **Metadata** | `{{METADATA}}` | 环境元数据（禁止在回复中提及） |
+| **Idea Cards** | `{{RAG_CARDS_COLD_MEMORY}}` | Lite RAG 检索结果（禁止在回复中提及） |
 
-### 2.1 变量标签说明
-
-| 占位符 | 类型 | 说明 |
-| :--- | :--- | :--- |
-| `TASK_INSTRUCTION` | VAR | 用户或父 Agent 分配的具体指令 |
-| `CORE_BASE_TEMPLATE` | CONST | 行为准则与工具定义 |
-| `NOTEBOOK_HOT_MEMORY` | VAR | Agent 自我管理的持久化记忆，仅 Main_Agent |
-| `PROJECT_SPECIFIC_RULES` | VAR | 递归读取的 AGENTS.md 规则集 |
-| `TRACE_HISTORY_PART1` | VAR | 历史对话（缓存优化） |
-| `TRACE_HISTORY_PART2` | VAR | 最新用户输入 |
-| `DYNAMIC_METADATA` | VAR | 环境状态快照 |
-| `RAG_CARDS_COLD_MEMORY` | VAR | Lite RAG 检索结果 |
-
-### 2.2 环境元数据 (Section 7: Metadata) 规范
+### 2.2 环境元数据 (Metadata) 规范
 
 此区域提供 Agent 决策所需的实时上下文，必须包含以下字段：
 
-- **当前时间**: ISO 8601 格式，包含时区。
+- **当前时间**: ISO 8601 格式。
 - **工作区根目录**: 当前项目的绝对路径。
-- **活动终端**: 正在运行的进程列表及其状态。
-- **资源限制**: 当前沙箱的 CPU/内存配额及剩余量。
-- **Agent 身份**: `agent_id`, `parent_id` (如有), `capabilities` (如 green-tea)。
-- **PFMS 状态**: 当前逻辑模型名称及 Provider 成本元数据。
-
-### 2.3 使用说明
-
-1. **Main Agent**: Notebook 持久化跨 Session，由 Organizer 定期蒸馏。
-2. **Sub-agent**: Notebook 仅作为 Trace 临时字段，随进程回收。
-3. **Token 管理**: Anamnesis 监控总 Token，触发压缩时优先压缩 Trace History。
+- **Agent ID**: 唯一标识符，用于审批路由。
+- **逻辑模型**: 当前使用的 PFMS 逻辑模型名称。
 
 ## 3. Lite RAG 机制
 
-基于启发式规则或主模型自提取的关键词，从全局+项目知识库中 Grep 检索相关 Markdown 知识卡。
+基于启发式规则从知识库中检索相关 Markdown 知识卡。
 
 ### 3.1 配置参数
 
@@ -79,7 +62,7 @@ anamnesis:
 
 ### 3.3 知识卡格式
 
-知识卡以 Markdown 文件存储，YAML Frontmatter 承载元数据：
+知识卡必须包含 YAML Frontmatter，以便于检索器解析：
 
 ```markdown
 ---
@@ -113,15 +96,7 @@ relevance_score: 0.95
 - **特殊上下文**: Organizer 拥有独立的、极简的认知上下文，不继承被审计对象的身份
 - **碎片化读取**: 采用"滑动窗口"或"关键事件采样"方式读取 `Trace`，严禁一次性加载全部日志，防止层级混淆 (Level Confusion)
 
-## 5. MCP 主动检索层 (可选)
-
-Anamnesis 可作为独立 MCP Server 部署，提供主动知识检索能力：
-
-- **定位**: 非 Agent Core 必需，独立项目
-- **功能**: 指定 `/path` 后，管理该路径下所有 Markdown 知识卡
-- **接口**: 标准 MCP Tool，支持深度检索、知识卡 CRUD
-
-## 6. TDD 验证点
+## 5. TDD 验证点
 
 - **摘要一致性**: 验证在 Token 溢出触发压缩后，关键的"失败教训"和"成功路径"是否在摘要中得到保留
 - **检索相关性**: 验证注入的 RAG Cards 是否确实降低了模型在处理复杂任务时的预测误差

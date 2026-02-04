@@ -18,7 +18,7 @@ description: "Proactively invoke this skill when needing to select or update the
 4. **DeepSeek**: V3.2 。
 5. **Alibaba (Qwen)**: Qwen3 。
 6. **Moonshot (Kimi)**: Kimi K2.5 。
-7. **xAI (Grok)**: Grok 4.2 。
+7. **xAI (Grok)**: Grok 4.1 。
 
 ## 2. 自动化获取流程
 
