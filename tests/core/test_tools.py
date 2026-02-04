@@ -1,3 +1,4 @@
+from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
@@ -18,7 +19,8 @@ class MockTool(BaseTool):
     description = "A tool for testing"
     args_schema = MockArgs
 
-    async def execute(self, input_str: str) -> str:
+    async def execute(self, **kwargs: Any) -> Any:
+        input_str: str = kwargs["input_str"]
         return f"Processed: {input_str}"
 
 @pytest.fixture

@@ -10,7 +10,7 @@ class AnthropicAdapter:
         model: str, 
         api_key: str, 
         base_url: str | None = None,
-        capabilities: list[str] = None,
+        capabilities: list[str] | None = None,
         has_vision: bool = False,
         has_thinking: bool = False,
         default_max_tokens: int = 4096,
@@ -41,16 +41,27 @@ class AnthropicAdapter:
         
         content.append({"type": "text", "text": prompt})
 
+        from anthropic.types import Message, TextBlock
         response = await self.client.messages.create(
             model=self.model_name,
             max_tokens=self.default_max_tokens,
-            messages=[{"role": "user", "content": content}],
+            messages=[{"role": "user", "content": content}],  # type: ignore
             stream=False
         )
-        text_content = "".join([block.text for block in response.content if block.type == "text"])
-        return text_content
+        if isinstance(response, Message):
+            text_content = "".join([block.text for block in response.content if isinstance(block, TextBlock)])
+            return text_content
+        return ""
 
 class MagicModelInfo:
     def __init__(self, has_vision: bool, has_thinking: bool):
-        self.has_vision = has_vision
-        self.has_thinking = has_thinking
+        self._has_vision = has_vision
+        self._has_thinking = has_thinking
+
+    @property
+    def has_vision(self) -> bool:
+        return self._has_vision
+
+    @property
+    def has_thinking(self) -> bool:
+        return self._has_thinking

@@ -73,12 +73,12 @@ def test_context_factory_assembles_v3_standard():
     assert "main-agent" in footer_msg["content"]
     assert "Python Best Practices" in footer_msg["content"]
 
-def test_context_factory_normalize_history():
+def test_context_factory_normalize_history() -> None:
     config = AnamnesisConfig()
     factory = ContextFactory(config=config, metadata=SessionMetadata(agent_id="test"))
     
     # 模拟未闭合的工具调用
-    history = [
+    history: list[dict[str, Any]] = [
         {"role": "user", "content": "Run ls"},
         {"role": "assistant", "content": "Calling ls...", "tool_calls": [{"id": "1", "type": "function"}]}
     ]

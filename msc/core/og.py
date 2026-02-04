@@ -58,7 +58,7 @@ class Session(BaseModel):
     metadata_provider: MetadataProvider | None = None
     rules_discoverer: RulesDiscoverer | None = None
 
-    async def start(self):
+    async def start(self) -> None:
         self.status = SessionStatus.RUNNING
         self.metadata_provider = MetadataProvider(agent_id="main-agent")
         self.rules_discoverer = RulesDiscoverer(workspace_root=self.workspace_root)
@@ -67,13 +67,15 @@ class Session(BaseModel):
             metadata=self.metadata_provider.collect()
         )
 
-    async def stop(self):
+    async def stop(self) -> None:
         self.status = SessionStatus.COMPLETED
 
-    async def run_loop(self, user_input: str):
+    async def run_loop(self, user_input: str) -> None:
         self.history.append({"role": "user", "content": user_input})
         
         while self.status == SessionStatus.RUNNING:
+            if self.rules_discoverer is None or self.metadata_provider is None or self.context_factory is None:
+                break
             rules = self.rules_discoverer.scan()
             metadata = self.metadata_provider.collect()
             self.context_factory.metadata = metadata

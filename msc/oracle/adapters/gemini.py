@@ -11,7 +11,7 @@ class GeminiAdapter:
         model: str, 
         api_key: str, 
         base_url: str | None = None,
-        capabilities: list[str] = None,
+        capabilities: list[str] | None = None,
         has_vision: bool = False,
         has_thinking: bool = False,
         vertexai: bool = False,
@@ -57,5 +57,13 @@ class GeminiAdapter:
 
 class MagicModelInfo:
     def __init__(self, has_vision: bool, has_thinking: bool):
-        self.has_vision = has_vision
-        self.has_thinking = has_thinking
+        self._has_vision = has_vision
+        self._has_thinking = has_thinking
+
+    @property
+    def has_vision(self) -> bool:
+        return self._has_vision
+
+    @property
+    def has_thinking(self) -> bool:
+        return self._has_thinking

@@ -189,10 +189,13 @@ Full history of the current conversation. Please analyze the history to ensure c
         
         return messages
 
-    def assemble(self, **kwargs) -> str:
+    def assemble(self, **kwargs: Any) -> str:
         messages = self.build_messages(**kwargs)
-        # Filter out system messages for the final prompt string if needed,
-        # but here we want to see the full structure.
-        # The issue is that we are joining them into a single string which might be confusing for the model
-        # if not properly delimited.
-        return "\n\n".join([f"<{m['role']}>\n{m['content']}" for m in messages])
+        # For simple text-based LLM adapters that don't support message lists,
+        # we join them into a single string.
+        prompt_parts = []
+        for m in messages:
+            role = m["role"]
+            content = m["content"]
+            prompt_parts.append(f"<{role}>\n{content}\n</{role}>")
+        return "\n\n".join(prompt_parts)

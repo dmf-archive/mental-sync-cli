@@ -1,7 +1,5 @@
 # MSC Minimal Tool Set
 
-> "在敌对环境中最小化攻击面，在自由能约束下最大化表达能力。"
-
 ## 核心原则
 
 1. **系统工具优先**: 优先使用系统原生命令行工具（`cat`, `grep`, `ast-grep` 等），通过 `execute` 统一调度。
@@ -17,7 +15,7 @@
 | `list_files(path(str);recursive(bool))` | 内置 | 结构化 JSON 输出；系统 `ls` 格式冗余难以解析 |
 | `execute(command(str);cwd(str))` | 内置 | 系统默认shell的入口；通过提示词动态更新可用 CLI 工具 |
 | `model_switch(model_name(str))` | 内置 | PFMS 路由入口，Main Agent自我插拔 |
-| `create_agent(task_description(str);model_name(str);require_caps(list);require_thinking(bool);shared_memory(bool);sandbox_config(dict))` | 内置 | PFMS 路由入口；连接 Main Agent 与 Sub-agent 生态 |
+| `create_agent(task_description(str);model_name(str);require_caps(list);require_thinking(bool);shared_memory(bool);sandbox_config(dict))` | 内置 | PFMS 路由入口；连接 Main Agent 与 subagent 生态 |
 | `ask_agent(agent_id(str);message(str);priority(str))` | 内置 | 跨代理通信接口；支持 standard/high 优先级消息传递。`agent_id=0` 指向 Main Agent。 |
 | `memory(action(str);message(str);key(str))` | 内置 | Anamnesis 声明式接口；Agent 自我记忆的 CRUD |
 
@@ -25,10 +23,10 @@
 
 | 工具 | 排除理由 |
 | :--- | :--- |
-| `read_file` | 系统 `cat` 足够；通过 `execute` 调用即可 |
-| `grep` | 系统 `grep`/`rg` 足够；通过 `execute` 调用即可 |
-| `ast_grep` | 系统安装 `ast-grep` 足够；通过 `execute` 调用即可 |
-| `fetch_url` | 使用系统 `curl`/`wget`；通过prompt提示和 `execute` 调用即可 |
+| `read_file` | 通过 `execute` 调用系统 `cat`|
+| `grep` | 通过 `execute` 调用系统 `grep`/`rg`|
+| `ast_grep` | 通过 `execute` 安装 `ast-grep` 即可 |
+| `fetch_url` | MCP server for search and fetch |
 
 ## 安全模型
 
@@ -38,7 +36,7 @@
 
 ```yaml
 sandbox_config:
-  # 标准策略：适用于大多数 Sub-agent
+  # 标准策略：适用于大多数 subagent
   normal:
     allowed_read_paths:
       - "./src"
@@ -76,6 +74,35 @@ sandbox_config:
 
 | 等级 | 描述 | 触发条件 |
 | :--- | :--- | :--- |
-| `auto` | 自动执行 | 路径在白名单内|
-| `hil` | 人工审批 | 路径不在白名单 |
+| `pass` | 自动执行 | 路径在白名单内|
+| `check` | 人工审批 | 路径不在白名单 |
 | `deny` | 拒绝执行 | 路径在黑名单 |
+
+### IPC 协议规范
+
+当通过 `ask_agent` 进行结构化通信时，`message` 字段应包含以下 JSON 格式以触发特定逻辑：
+
+### 1. 审批请求 (Approval Request)
+
+用于 subagent 向父级或 Main Agent 申请高危操作权限。
+
+```json
+{
+  "type": "approval_request",
+  "action": "execute",
+  "params": { "command": "rm -rf ./tmp" },
+  "reason": "Cleanup temporary build artifacts"
+}
+```
+
+### 2. 任务结果回传 (Task Result)
+
+subagent 完成任务后，必须向 `agent_id=0` 发送此格式。
+
+```json
+{
+  "type": "task_result",
+  "status": "success",
+  "data": { "summary": "Analysis complete", "files_generated": ["report.md"] }
+}
+```

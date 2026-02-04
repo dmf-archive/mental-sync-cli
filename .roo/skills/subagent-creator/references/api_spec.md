@@ -14,7 +14,7 @@ async def create_subagent(
     sandbox_config: Optional[Dict[str, Any]] = None
 ) -> str:
     """
-    创建一个新的 Sub-agent 实例并返回其唯一标识符 agent_id。
+    创建一个新的 subagent 实例并返回其唯一标识符 agent_id。
     
     Args:
         task_description: 子任务的具体指令。

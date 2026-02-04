@@ -10,7 +10,7 @@ class OllamaAdapter(OpenAIAdapter):
         model: str, 
         api_key: str = "ollama", 
         base_url: str | None = None,
-        capabilities: list[str] = None,
+        capabilities: list[str] | None = None,
         has_vision: bool = False,
         has_thinking: bool = False,
         **kwargs: Any

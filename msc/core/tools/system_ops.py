@@ -17,6 +17,8 @@ class SandboxProvider(ABC):
 
 class NoSandboxProvider(SandboxProvider):
     def wrap_command(self, command: list[str], allowed_paths: list[str], blocked_paths: list[str]) -> list[str]:
+        _ = allowed_paths
+        _ = blocked_paths
         return command
 
 class MacOSSandbox(SandboxProvider):
@@ -51,6 +53,7 @@ class LinuxSandbox(SandboxProvider):
 
 class WindowsSandbox(SandboxProvider):
     def wrap_command(self, command: list[str], allowed_paths: list[str], blocked_paths: list[str]) -> list[str]:
+        _ = allowed_paths
         acl_commands = []
         for path in blocked_paths:
             abs_path = os.path.abspath(path)
@@ -107,7 +110,9 @@ class ExecuteTool(BaseTool):
     description = "Execute a system command in a sandboxed subprocess."
     args_schema = ExecuteArgs
 
-    async def execute(self, command: str, cwd: str | None = None) -> dict[str, Any]:
+    async def execute(self, **kwargs: Any) -> Any:
+        command: str = kwargs["command"]
+        cwd: str | None = kwargs.get("cwd")
         if self.context.gateway:
             approved = await self.context.gateway.request_permission(
                 agent_id=self.context.agent_id,
@@ -125,7 +130,7 @@ class ExecuteTool(BaseTool):
         if not tokens:
             return {"exit_code": 1, "stdout": "", "stderr": "MSC.SecurityViolation: Empty command."}
 
-        def normalize_path(p):
+        def normalize_path(p: str) -> str:
             return os.path.normpath(os.path.abspath(p)).lower()
 
         cmd_full_norm = " ".join(tokens).lower()

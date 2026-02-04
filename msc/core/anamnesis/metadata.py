@@ -10,7 +10,7 @@ class MetadataProvider:
         self.model_name: str = ""
         self.provider_cost: dict[str, float] = {}
 
-    def set_pfms_status(self, model_name: str, cost: dict[str, float]):
+    def set_pfms_status(self, model_name: str, cost: dict[str, float]) -> None:
         self.model_name = model_name
         self.provider_cost = cost
 
@@ -37,7 +37,7 @@ class MetadataProvider:
             workspace_root=os.getcwd(),
             model_name=self.model_name,
             provider_cost=self.provider_cost,
-            active_terminals=active_terminals,
+            active_terminals=[{"name": t} for t in active_terminals],
             resource_limits={"cpu_count": os.cpu_count() or 1},
             capabilities=capabilities
         )

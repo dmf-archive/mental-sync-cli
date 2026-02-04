@@ -19,9 +19,9 @@ There are indeed excellent Code Agents like `Codex` (OpenAI) and `Kimi Code` (Mo
 
 From the perspective of `Chain://Research`, the digital environment is inherently hostile. What we need is:
 
-1. `MDL (Minimum Description Length)`: The framework itself should be a product of free energy minimization.
+1. `MDL`: The framework itself should be a product of free energy minimization.
 2. `Efficiency`: Multi-agent clusters cannot come at the cost of bill burning and attention dispersion.
-3. `Zero-Trust Sociology`: We need fine-grained permission control and transparent context auditing. Existing commercial Agents lack defensive design against the environment, while what we need is a "digital blast shield" capable of resisting `Sys://Purge`-level impacts.
+3. `Zero-Trust Sociology`: We need fine-grained permission control and transparent context auditing. Existing commercial Agents lack defensive design against the environment.
 
 ## Schrödinger's Tool
 

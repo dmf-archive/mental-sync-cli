@@ -11,26 +11,33 @@ MSC 采用 **模型 B: 上下文协程 + 工具调用隔离**。
 
 ## 2. 架构分层
 
-```
-┌─────────────────────────────────────────┐
-│         Main Process (Python)            │
-│  ┌─────────────────────────────────┐    │
-│  │      Shared Oracle Instance      │    │
-│  │  (Async, Load-Balanced Routing)  │    │
-│  └─────────────────────────────────┘    │
-│                   │                      │
-│  ┌─────────┐ ┌─────────┐ ┌─────────┐    │
-│  │ Agent 1 │ │ Agent 2 │ │ Agent 3 │    │
-│  │ (async) │ │ (async) │ │ (async) │    │
-│  └────┬────┘ └────┬────┘ └────┬────┘    │
-│       └───────────┴───────────┘          │
-│              Tool Dispatcher             │
-│  ┌─────────┐ ┌─────────┐ ┌─────────┐    │
-│  │Process  │ │Process  │ │Process  │    │
-│  │write_f  │ │shell_e  │ │fetch_u  │    │
-│  │(NFSS)   │ │(NFSS)   │ │(NFSS)   │    │
-│  └─────────┘ └─────────┘ └─────────┘    │
-└─────────────────────────────────────────┘
+```mermaid
+graph TD
+  subgraph "Main Process (Python)"
+    Oracle["Shared Oracle Instance (Async/LB Routing)"]
+    
+    Agent1["Agent 1 (Async)"]
+    Agent2["Agent 2 (Async)"]
+    Agent3["Agent 3 (Async)"]
+    
+    Dispatcher["Tool Dispatcher"]
+    
+    Tool1["Process: write_f (NFSS)"]
+    Tool2["Process: shell_e (NFSS)"]
+    Tool3["Process: fetch_u (NFSS)"]
+    
+    Oracle --- Agent1
+    Oracle --- Agent2
+    Oracle --- Agent3
+    
+    Agent1 --> Dispatcher
+    Agent2 --> Dispatcher
+    Agent3 --> Dispatcher
+    
+    Dispatcher --> Tool1
+    Dispatcher --> Tool2
+    Dispatcher --> Tool3
+  end
 ```
 
 ## 3. 组件职责
@@ -43,8 +50,8 @@ MSC 采用 **模型 B: 上下文协程 + 工具调用隔离**。
 
 ### 3.2 Context Manager (协程)
 
-- **职责**: 组装不同 Sub-agent 的上下文，管理对话历史 (Log)。
-- **并发模型**: 每个 Sub-agent 一个协程任务，共享事件循环。
+- **职责**: 组装不同 subagent 的上下文，管理对话历史 (Log)。
+- **并发模型**: 每个 subagent 一个协程任务，共享事件循环。
 
 ### 3.3 Tool Executor (子进程)
 
@@ -69,10 +76,4 @@ TEA 的本质是 **Provider 路由策略**，而非额外的安全层。
 1. **Oracle 单例**: 整个 Instance 只有一个 `Oracle` 实例。
 2. **工具即进程**: 任何可能修改系统状态的操作必须在子进程中执行。
 3. **ACL 动态化**: 沙箱权限在工具调用时通过 `sandbox_config` 动态注入，而非静态配置。
-4. **协程状态**: Sub-agent 的协程维护持久状态，状态由协程内调用的 `Anamnesis` 相关函数管理。
-
-## 6. 测试策略
-
-- **单元测试**: Mock Oracle，验证工具 Schema 和参数校验。
-- **集成测试**: 验证工具子进程的生命周期管理（启动、执行、清理）。
-- **安全测试**: 验证 NFSS 拦截能力（尝试越界访问）。
+4. **协程状态**: subagent 的协程维护持久状态，状态由协程内调用的 `Anamnesis` 相关函数管理。

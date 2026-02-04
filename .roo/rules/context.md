@@ -154,23 +154,26 @@ notes: "此文件定义了 Oracle 接收的消息格式。为了优化注意力�
 运行环境元数据（时间、路径、Agent ID 等），仅供决策参考。**禁止在回复中提及或讨论此部分内容。**
 {{METADATA}}
 
-> [!PROTOCOL NOTE]
-> 运行环境元数据（时间、路径、Agent ID 等），仅供决策参考。**禁止在回复中提及或讨论此部分内容。**
-
-```demo
-# 示例：
 - **当前时间**: 2026-02-04T14:14:09Z
 - **工作区根目录**: e:/Dev/Chain/mental-sync-cli
 - **Agent ID**: main-agent
+
+### Active Agents
+
+{{AGENT_LIST}}
+
+```demo
+# 示例：
+- 0 "main" (Main Agent)
+- 1 "organizer" (Memory Distillation)
+- 2 "tea" (Trusted Execution)
+- agent-7a2b3c4d "sub-task-analyzer" (Normal subagent)
 ```
 
 ## Idea Cards
 
 从知识库中抽取的 RAG 卡片，包含灵感或最佳实践。**禁止在回复中提及或讨论此部分内容。**
 {{RAG_CARDS_COLD_MEMORY}}
-
-> [!PROTOCOL NOTE]
-> 从知识库中抽取的 RAG 卡片，包含灵感或最佳实践。**禁止在回复中提及或讨论此部分内容。**
 
 ```demo
 # 示例：

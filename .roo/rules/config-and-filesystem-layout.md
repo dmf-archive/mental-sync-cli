@@ -78,7 +78,7 @@ MSC 遵循“就近原则”与“多框架兼容”策略。加载顺序如下�
 
 ## 4. Anamnesis 实体承载
 
-- **Notebook**: 存储在 `notebook/` 目录下。Main Agent 拥有读写权限，Sub-agent 默认只读或接收副本。
+- **Notebook**: 存储在 `notebook/` 目录下。Main Agent 拥有读写权限，subagent 默认只读。
 - **Knowledge Cards**: 存储在 `knowledge-cards/` 目录下。由 `Organizer` 写入，由 `Anamnesis` 通过 `Ltie RAG` 检索并注入上下文。
 
 ## 5. 开发者备注

@@ -1,19 +1,25 @@
-from typing import Any, List, Optional, Protocol, runtime_checkable
+from typing import Any, Optional, Protocol, runtime_checkable
 
 from pydantic import BaseModel
 
 
 @runtime_checkable
 class ModelCapability(Protocol):
-    has_vision: bool
-    has_thinking: bool
+    @property
+    def has_vision(self) -> bool: ...
+    @property
+    def has_thinking(self) -> bool: ...
 
 @runtime_checkable
 class ChatProvider(Protocol):
-    name: str
-    model_name: str
-    capabilities: list[str]
-    model_info: ModelCapability
+    @property
+    def name(self) -> str: ...
+    @property
+    def model_name(self) -> str: ...
+    @property
+    def capabilities(self) -> list[str]: ...
+    @property
+    def model_info(self) -> ModelCapability: ...
     async def generate(self, prompt: str, image: str | None = None) -> str: ...
 
 class Oracle:

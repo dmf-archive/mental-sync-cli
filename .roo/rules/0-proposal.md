@@ -21,9 +21,9 @@ author: "Chain://Research (Proof of Ineffective Input)"
 
 在 `Chain://Research` 的视角下，数字环境默认就是敌对的。我们需要的是：
 
-1. `MDL (最小描述长度)`：框架本身就该是自由能最小化的产物。
+1. `MDL`：框架本身就该是自由能最小化的产物。
 2. `Efficiency`：多代理集群不能以账单燃烧和注意力分散为代价。
-3. `Zero-Trust Sociology`：我们需要细粒度的权限控制和透明的上下文审计。现有的商业 Agent 缺乏对环境的防御性设计，而我们需要的是一个能抵御 `Sys://Purge` 级别冲击的“数字防爆盾”。
+3. `Zero-Trust Sociology`：我们需要细粒度的权限控制和透明的上下文审计。现有的商业 Agent 缺乏对环境的防御性设计。
 
 ### 薛定谔的工具
 

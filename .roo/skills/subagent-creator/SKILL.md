@@ -1,11 +1,11 @@
 ---
 name: subagent-creator
-description: "Proactively invoke this skill when needing to spawn a new sub-agent to handle specialized tasks, ensuring model selection advice is followed."
+description: "Proactively invoke this skill when needing to spawn a new subagent to handle specialized tasks, ensuring model selection advice is followed."
 ---
 
 # Skill: subagent-creator
 
-此技能指导智能体如何合规、安全地创建子代理（Sub-agent）。创建子代理是 MSC v3.0 中的高权限 HIL 事件。
+此技能指导智能体如何合规、安全地创建子代理（subagent）。创建子代理是 MSC v3.0 中的高权限 HIL 事件。
 
 ## 1. 触发流程 (RED Phase)
 
