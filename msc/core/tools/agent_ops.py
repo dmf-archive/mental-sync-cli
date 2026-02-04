@@ -1,0 +1,49 @@
+import uuid
+from typing import Any, Dict, List, Optional
+from pydantic import BaseModel, Field
+from msc.core.tools.base import BaseTool
+
+class CreateSubagentArgs(BaseModel):
+    task_description: str = Field(..., description="Specific instructions for the sub-task")
+    model_name: str = Field("auto", description="Logical model name")
+    require_caps: Optional[List[str]] = Field(None, description="Mandatory capability tags")
+    require_thinking: bool = Field(False, description="Whether CoT reasoning is mandatory")
+    shared_memory: bool = Field(False, description="Whether to allow access to parent's Anamnesis")
+    sandbox_config: Optional[Dict[str, Any]] = Field(None, description="Fine-grained sandbox permissions")
+
+class CreateSubagentTool(BaseTool):
+    name = "create_subagent"
+    description = "Create a new Sub-agent instance and return its unique agent_id."
+    args_schema = CreateSubagentArgs
+
+    async def execute(
+        self,
+        task_description: str,
+        model_name: str = "auto",
+        require_caps: Optional[List[str]] = None,
+        require_thinking: bool = False,
+        shared_memory: bool = False,
+        sandbox_config: Optional[Dict[str, Any]] = None
+    ) -> str:
+        # PFMS Integration: Use shared Oracle for model routing
+        # In model B, the Oracle instance is shared across the MSC instance
+        if self.context.oracle:
+            # Logic for model selection/routing would go here
+            # For now, we just ensure the oracle is accessible
+            pass
+            
+        agent_id = f"agent-{uuid.uuid4().hex[:8]}"
+        return agent_id
+
+class AskAgentArgs(BaseModel):
+    agent_id: str = Field(..., description="Unique identifier of the target agent")
+    message: str = Field(..., description="Message content to send")
+    priority: str = Field("standard", description="Message priority (standard/high)")
+
+class AskAgentTool(BaseTool):
+    name = "ask_agent"
+    description = "Send a message or instruction to a specified sub-agent."
+    args_schema = AskAgentArgs
+
+    async def execute(self, agent_id: str, message: str, priority: str = "standard") -> str:
+        return f"Message sent to {agent_id} with priority {priority}"

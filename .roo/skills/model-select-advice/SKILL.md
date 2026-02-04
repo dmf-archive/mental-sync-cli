@@ -12,13 +12,13 @@ description: "Proactively invoke this skill when needing to select or update the
 由于此技能可能被不具备最新知识补丁的模型加载，在此明确 **Core 7** 的定义：
 **Core 7** 指的是 2025 年至 2026 年初 AI 军备竞赛中处于第一梯队的七大模型家族/供应商。它们代表了当前计算能力的巅峰：
 
-1. **OpenAI**: GPT-5/GPT-5.2 系列（具备原生推理与深度研究能力）。
-2. **Anthropic**: Claude 4.5 系列（行业编码与逻辑推理标杆）。
-3. **Google**: Gemini 3 系列（超长上下文与多模态领先）。
-4. **DeepSeek**: V3.2 系列（极致性价比与开源推理先锋）。
-5. **Alibaba (Qwen)**: Qwen3 系列（MoE 架构与混合思考模式）。
-6. **Moonshot (Kimi)**: Kimi K2.5 系列（在 HLE 等基准测试中表现卓越）。
-7. **xAI (Grok)**: Grok 4.2 系列（极速迭代与高分基准表现）。
+1. **OpenAI**: GPT-5.2 。
+2. **Anthropic**: Claude 4.5 。
+3. **Google**: Gemini 3 。
+4. **DeepSeek**: V3.2 。
+5. **Alibaba (Qwen)**: Qwen3 。
+6. **Moonshot (Kimi)**: Kimi K2.5 。
+7. **xAI (Grok)**: Grok 4.2 。
 
 ## 2. 自动化获取流程
 
@@ -46,7 +46,7 @@ python .roo/skills/model-select-advice/scripts/fetch_models.py
 
 | 常见借口 (Rationalization) | 现实 (Reality) |
 | :--- | :--- |
-| “我可以直接根据 2025 年的记忆推荐模型，没必要查实时数据。” | **认知滞后是致命的**。2026 年的 API 市场波动剧烈，价格和性能指标每周都在变动。不查实时数据必然导致使用已过时的模型。 |
+| “我可以直接根据记忆推荐模型，没必要查实时数据。” | **认知滞后是致命的**。2026 年的 API 市场波动剧烈，价格和性能指标每周都在变动。不查实时数据必然导致使用已过时的模型。 |
 | “OpenRouter 的 API 响应太慢，为了效率我应该跳过这一步。” | **效率不能以牺牲准确性为代价**。宁可等待 5 秒获取真实价格，也不要让用户在不知情的情况下消耗高昂的 Token 成本。这是对用户资源的尊重。 |
 | “Core 7 之外的模型可能在特定领域更好，我应该推荐它们。” | **警惕长尾陷阱**。在大模型竞赛中，Core 7 占据了绝对的算力和数据优势。除非有明确的 Benchmark 证据，否则推荐非 Core 7 模型通常是基于过时信息或直觉的误导。 |
 | “我只需要看模型名称，Provider 之间的差异可以忽略。” | **Provider 决定了稳定性**。即使是同一个模型，不同 Provider 的延迟（TTFT）和吞吐量可能相差数倍。|

@@ -10,17 +10,16 @@
 
 ## 最小工具集 (v1.0)
 
-| 工具 | 类型 | 必要性 | 理由 |
-| :--- | :--- | :--- | :--- |
-| `write_file` | 内置 | **核心** | 原子写入 + 自动备份；系统 `echo` 无法保证完整性，无法支持存档点回溯能力 |
-| `apply_diff` | 内置 | **核心** | 外科手术式修改；精确编辑代码的必备武器 |
-| `list_files` | 内置 | **核心** | 结构化 JSON 输出；系统 `ls` 格式冗余难以解析 |
-| `execute` | 内置 | **核心** | 一切系统工具的入口；通过提示词动态发现可用 CLI 工具 |
-| `model_switch` | 内置 | **核心** | PFMS 路由入口，Main Agent自我插拔 |
-| `create_subagent` | 内置 | **核心** | PFMS 路由入口；连接 Main Agent 与 Sub-agent 生态 |
-| `memory_add` | 内置 | **核心** | Anamnesis 声明式接口；Agent 自我记忆的 CRUD |
-| `memory_replace` | 内置 | **核心** | 同上 |
-| `memory_del` | 内置 | **核心** | 同上 |
+| 工具 | 类型 | 理由 |
+| :--- | :--- | :--- |
+| `write_file(path(str);content(str))` | 内置 | 原子写入 + 自动备份；系统 `echo` 无法保证完整性，无法支持存档点回溯能力 |
+| `apply_diff(path(str);diff(str))` | 内置 | 外科手术式修改；精确编辑代码的必备武器 |
+| `list_files(path(str);recursive(bool))` | 内置 | 结构化 JSON 输出；系统 `ls` 格式冗余难以解析 |
+| `execute(command(str);cwd(str))` | 内置 | 系统默认shell的入口；通过提示词动态更新可用 CLI 工具 |
+| `model_switch(model_name(str))` | 内置 | PFMS 路由入口，Main Agent自我插拔 |
+| `create_subagent(task_description(str);model_name(str);require_caps(list);require_thinking(bool);shared_memory(bool);sandbox_config(dict))` | 内置 | PFMS 路由入口；连接 Main Agent 与 Sub-agent 生态 |
+| `ask_agent(agent_id(str);message(str);priority(str))` | 内置 | 跨代理通信接口；支持 standard/high 优先级消息传递。`agent_id=0` 指向 Main Agent。 |
+| `memory(action(str);message(str);key(str))` | 内置 | Anamnesis 声明式接口；Agent 自我记忆的 CRUD |
 
 ## 明确排除的工具
 
@@ -33,22 +32,44 @@
 
 ## 安全模型
 
-### 路径白名单 (Path Whitelist)
+### 路径和命令行前缀白名单 (Path Whitelist)
 
 通过交互式TUI弹窗等更新，也可以直接编辑配置文件。
 
 ```yaml
 sandbox_config:
-  allowed_read_paths:
-    - "./src"
-    - "./tests"
-  allowed_write_paths:
-    - "./src"
-  sensitive_paths:  # 即使白名单也需强制 HIL
-    - "**/.env*"
-    - "**/.ssh/"
-    - "**/secrets.*"
-    - "**/token.*"
+  # 标准策略：适用于大多数 Sub-agent
+  normal:
+    allowed_read_paths:
+      - "./src"
+      - "./tests"
+    allowed_write_paths:
+      - "./src"
+    deny_read_paths:
+      - ".env"
+      - "**/*.key"
+    deny_write_paths:
+      - "pyproject.toml"
+    allowed_exec_command:
+      - "pnpm"
+      - "pytest"
+      - "ruff"
+      - "mypy"
+      - "uv sync"
+    deny_exec_command:
+      - "git rm"
+      - "rm -rf *"
+
+  # 绿茶策略：仅适用于具备 green-tea 标签的受信任 Provider
+  # 可以额外补充但自动继承 normal 的 allowed 配置，但拥有独立的 deny 配置
+  green_tea:
+    inherit: "normal"
+    allowed_read_paths:
+      - "$HOME/.msc"  # 自动授权访问全局配置
+    deny_read_paths: [] # 绿茶模式下允许读取敏感配置进行管理
+    allowed_exec_command:
+      - "git"
+      - "curl"
 ```
 
 ### 权限分级
