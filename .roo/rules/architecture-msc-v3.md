@@ -153,7 +153,7 @@ graph TB
 
 ## 7. 认知上下文布局 (Context Layout)
 
-为了对抗注意力稀释并优化推理效率，MSC 采用标准化的 System Prompt 布局。详细的布局规范、记忆分层逻辑及 `Lite RAG` 机制请参阅 [`.roo/rules/anamnesis-and-context-manager.md`](.roo/rules/anamnesis-and-context-manager.md)。
+为了对抗注意力稀释并优化推理效率，MSC 采用标准化的 System Prompt 布局。详细的布局规范、记忆分层逻辑及 `Lite RAG` 机制请参阅 [`.roo/rules/anamnesis-and-context-manager.md`](anamnesis-and-context-manager.md)。
 
 ## 数据流与审批协议
 

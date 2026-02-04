@@ -27,7 +27,7 @@ author: "Chain://Research (Proof of Ineffective Input)"
 
 ### 薛定谔的工具
 
-MSC 本质上是一个连接叙事与工程的脚手架。它是一个“薛定谔的工具”，由于Tiny-ONN等组件并未就绪，目前的 Mental-Sync-CLI 是一个`披着科幻外衣的自动化工程工具`，顺便还能玩玩 `M`ental-`S`ync-`C`LI 的缩写梗。
+MSC 本质上是一个连接叙事与工程的脚手架。它是一个“薛定谔的工具”，由于Tiny-ONN等组件并未就绪，目前的 Mental-Sync-CLI 是一个`披着科幻外衣的自动化工程工具`，顺便还能玩玩 **M**ental-**S**ync-**C**LI 的缩写梗。
 
 但未来，它或许真能发展为Mental Smart Chain的 `python-evm`.
 
@@ -38,8 +38,6 @@ MSC 本质上是一个连接叙事与工程的脚手架。它是一个“薛定�
 1. `Model Agnostic`: 别被单一供应商绑架。通过 `PFMS (Provider-Free Model Selector)`，我们可以在不同的物理实例间透明切换。主权意味着永远不被单一故障点锁定。
 2. `Protocol Agnostic`: 全面兼容 `MCP (Model Context Protocol)`。我们不重复造轮子，我们只是把轮子装在装甲车上。
 3. `Security by Design`: 默认拦截所有高危操作。想要写入文件？想要请求网络？去求得用户的显式授权吧。
-
-我们会参考 `ref/codex` 的 `ratatui` 实现来打造 TUI，借鉴 `ref/kimi-cli` 的 `kosong` 抽象层来搞编排。至于沙箱，无论是 Docker 还是 OS 原生隔离，都是为了构建那个保护我们免于认知消融的“数字防爆盾”。
 
 ### 预期产出：不仅仅是代码
 
