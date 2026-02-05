@@ -2,12 +2,27 @@ import asyncio
 import os
 import platform
 import shlex
+import sys
 from abc import ABC, abstractmethod
 from typing import Any
 
 from pydantic import BaseModel, Field
 
 from msc.core.tools.base import BaseTool
+
+try:
+    if platform.system() == "Windows":
+        import win32api
+        import win32con
+        import win32process
+        import win32security
+        import win32job
+        import win32event
+        HAS_PYWIN32 = True
+    else:
+        HAS_PYWIN32 = False
+except ImportError:
+    HAS_PYWIN32 = False
 
 
 class SandboxProvider(ABC):
@@ -53,51 +68,64 @@ class LinuxSandbox(SandboxProvider):
 
 class WindowsSandbox(SandboxProvider):
     def wrap_command(self, command: list[str], allowed_paths: list[str], blocked_paths: list[str]) -> list[str]:
-        _ = allowed_paths
-        acl_commands = []
-        for path in blocked_paths:
-            abs_path = os.path.abspath(path)
-            if os.path.exists(abs_path):
-                acl_commands.append(f'icacls "{abs_path}" /deny "${{env:USERNAME}}:(OI)(CI)(R,W,D)" /Q')
+        if not HAS_PYWIN32:
+            _ = allowed_paths
+            acl_commands = []
+            for path in blocked_paths:
+                abs_path = os.path.abspath(path)
+                if os.path.exists(abs_path):
+                    acl_commands.append(f'icacls "{abs_path}" /deny "${{env:USERNAME}}:(OI)(CI)(R,W,D)" /Q')
 
-        cmd_exe = command[0]
-        cmd_args = shlex.join(command[1:]) if len(command) > 1 else ""
-        cmd_args_escaped = cmd_args.replace('"', '`"')
+            cmd_exe = command[0]
+            cmd_args = shlex.join(command[1:]) if len(command) > 1 else ""
+            cmd_args_escaped = cmd_args.replace('"', '`"')
+            
+            ps_wrapper = [
+                "powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command",
+                f"""
+                $OutputEncoding = [System.Text.Encoding]::UTF8;
+                {"; ".join(acl_commands) if acl_commands else " # No ACLs"};
+                $pinfo = New-Object System.Diagnostics.ProcessStartInfo;
+                $pinfo.FileName = "{cmd_exe}";
+                $pinfo.Arguments = "{cmd_args_escaped}";
+                $pinfo.UseShellExecute = $false;
+                $pinfo.CreateNoWindow = $true;
+                $pinfo.RedirectStandardOutput = $true;
+                $pinfo.RedirectStandardError = $true;
+                try {{
+                    $process = [System.Diagnostics.Process]::Start($pinfo);
+                    if (-not $process.WaitForExit(30000)) {{
+                        $process.Kill();
+                        [Console]::Error.Write("MSC.SandboxError: Process timed out.");
+                        exit 124;
+                    }}
+                    $stdout = $process.StandardOutput.ReadToEnd();
+                    $stderr = $process.StandardError.ReadToEnd();
+                    Write-Host $stdout -NoNewline;
+                    [Console]::Error.Write($stderr);
+                    exit $process.ExitCode;
+                }} catch {{
+                    [Console]::Error.Write("MSC.SandboxError: " + $_.Exception.Message);
+                    exit 1;
+                }}
+                """
+            ]
+            return ps_wrapper
+
+        cmd_line = shlex.join(command)
+        import json
+        blocked_json = json.dumps(blocked_paths)
         
-        ps_wrapper = [
-            "powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command",
-            f"""
-            $OutputEncoding = [System.Text.Encoding]::UTF8;
-            {"; ".join(acl_commands) if acl_commands else " # No ACLs"};
-            $pinfo = New-Object System.Diagnostics.ProcessStartInfo;
-            $pinfo.FileName = "{cmd_exe}";
-            $pinfo.Arguments = "{cmd_args_escaped}";
-            $pinfo.UseShellExecute = $false;
-            $pinfo.CreateNoWindow = $true;
-            $pinfo.RedirectStandardOutput = $true;
-            $pinfo.RedirectStandardError = $true;
-            try {{
-                $process = [System.Diagnostics.Process]::Start($pinfo);
-                $stdout = $process.StandardOutput.ReadToEnd();
-                $stderr = $process.StandardError.ReadToEnd();
-                $process.WaitForExit();
-                Write-Host $stdout -NoNewline;
-                [Console]::Error.Write($stderr);
-                exit $process.ExitCode;
-            }} catch {{
-                exit 1;
-            }}
-            """
-        ]
-        return ps_wrapper
+        launcher_path = os.path.join(os.path.dirname(__file__), "sandbox_launcher.py")
+        return [sys.executable, launcher_path, cmd_line, blocked_json]
 
 def get_sandbox_provider() -> SandboxProvider:
-    sys = platform.system()
-    if sys == "Darwin":
+    sys_platform = platform.system()
+    if sys_platform == "Darwin":
         return MacOSSandbox()
-    if sys == "Linux":
+    if sys_platform == "Linux":
         return LinuxSandbox()
-    if sys == "Windows":
+    if sys_platform == "Windows":
         return WindowsSandbox()
     return NoSandboxProvider()
 

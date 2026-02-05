@@ -1,9 +1,11 @@
+import json
 import uuid
 from typing import Any
 
 from pydantic import BaseModel, Field
 
 from msc.core.tools.base import BaseTool
+from msc.core.tools.system_ops import get_sandbox_provider
 
 
 class CreateAgentArgs(BaseModel):
@@ -19,23 +21,44 @@ class CreateAgentTool(BaseTool):
     description = "Create a new subagent instance and return its unique agent_id."
     args_schema = CreateAgentArgs
 
-    async def execute(self, **kwargs: Any) -> str:
+    async def execute(self, **kwargs: Any) -> dict[str, Any]:
         task_description: str = kwargs["task_description"]
         model_name: str = kwargs.get("model_name", "auto")
         require_caps: list[str] | None = kwargs.get("require_caps")
         require_thinking: bool = kwargs.get("require_thinking", False)
         shared_memory: bool = kwargs.get("shared_memory", False)
-        sandbox_config: dict[str, Any] | None = kwargs.get("sandbox_config")
-        if self.context.oracle:
-            # Verify if a suitable provider exists for the requested model and capabilities
-            try:
-                # We don't actually generate anything here, just verify routing
-                # In a real implementation, this would spawn a new Session/Agent process
-                pass
-            except Exception as e:
-                return f"Error: No suitable provider found for {model_name}. {e}"
-            
-        return f"agent-{uuid.uuid4().hex[:8]}"
+        sandbox_config: dict[str, Any] | None = kwargs.get("sandbox_config") or {}
+        
+        agent_id = f"agent-{uuid.uuid4().hex[:8]}"
+        
+        # 1. Register with Gateway if available
+        if self.context.gateway:
+            # In a real MSC implementation, the gateway would spawn a new Session object
+            # which runs in its own coroutine or process.
+            pass
+
+        # 2. Prepare Sandbox Execution (Simulation of process-level isolation)
+        # We use the sandbox provider to wrap a hypothetical 'msc-agent' command
+        provider = get_sandbox_provider()
+        allowed_paths = [self.context.workspace_root]
+        blocked_paths = self.context.blocked_paths
+        
+        # If sandbox_config provides specific paths, merge them
+        if "allowed_paths" in sandbox_config:
+            allowed_paths.extend(sandbox_config["allowed_paths"])
+        
+        # Construct the command that would start the sub-agent
+        # In this prototype, we just return the metadata and the 'wrapped' command
+        sub_agent_cmd = ["msc-agent", "--id", agent_id, "--task", task_description]
+        wrapped_cmd = provider.wrap_command(sub_agent_cmd, allowed_paths, blocked_paths)
+
+        return {
+            "agent_id": agent_id,
+            "status": "initialized",
+            "sandbox_wrapped_command": wrapped_cmd,
+            "model_assigned": model_name,
+            "message": f"Sub-agent {agent_id} created and sandboxed."
+        }
 
 class AskAgentArgs(BaseModel):
     agent_id: str = Field(..., description="Unique identifier of the target agent")

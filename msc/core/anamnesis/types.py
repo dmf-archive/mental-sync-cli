@@ -35,6 +35,7 @@ class SessionMetadata:
     parent_id: str | None = None
     capabilities: list[str] = field(default_factory=list)
     model_name: str = ""
-    provider_cost: dict[str, float] = field(default_factory=dict)
+    gas_used: float = 0.0
+    gas_limit: float = 0.0
     active_terminals: list[dict[str, Any]] = field(default_factory=list)
     resource_limits: dict[str, Any] = field(default_factory=dict)

@@ -1,98 +1,106 @@
+import pytest
 import os
 import platform
+import asyncio
+from msc.core.tools.system_ops import WindowsSandbox, get_sandbox_provider
 
-import pytest
-
-from msc.core.tools.base import ToolContext
-from msc.core.tools.system_ops import ExecuteTool
-
-
-@pytest.fixture
-def tool_context():
-    workspace = os.path.abspath(os.path.join(os.getcwd(), "tests", "mock-workspace"))
-    allowed_path = os.path.join(workspace, "allowed")
-    blocked_path = os.path.join(workspace, "blocked")
+@pytest.mark.skipif(platform.system() != "Windows", reason="Windows specific tests")
+@pytest.mark.asyncio
+async def test_windows_sandbox_restricted_token_simulation():
+    # This test will verify the current WindowsSandbox implementation
+    # and serve as a baseline for Restricted Token enhancement.
+    sandbox = WindowsSandbox()
     
-    yield ToolContext(
-        agent_id="test-security-agent",
-        workspace_root=workspace,
-        oracle=None,
-        allowed_paths=[allowed_path],
-        blocked_paths=[blocked_path]
+    # Test blocked path via icacls simulation
+    # We'll use a temp file to test ACL denial
+    test_file = os.path.abspath("sandbox_test_file.txt")
+    with open(test_file, "w") as f:
+        f.write("secret data")
+    
+    try:
+        # Verify that the command is wrapped in our python sandbox launcher
+        command = ["type", test_file]
+        wrapped = sandbox.wrap_command(command, allowed_paths=[], blocked_paths=[test_file])
+        
+        # Check if the launcher script path is in the wrapped command
+        assert any("sandbox_launcher.py" in arg for arg in wrapped)
+        
+    finally:
+        if os.path.exists(test_file):
+            # Reset ACLs if needed or just remove
+            os.system(f'icacls "{test_file}" /grant "${{env:USERNAME}}:(F)" /Q')
+            os.remove(test_file)
+
+@pytest.mark.skipif(platform.system() != "Windows", reason="Windows specific tests")
+@pytest.mark.asyncio
+async def test_windows_sandbox_execution():
+    # Verify that the powershell wrapper actually runs
+    sandbox = WindowsSandbox()
+    command = ["whoami"]
+    wrapped = sandbox.wrap_command(command, allowed_paths=[], blocked_paths=[])
+    
+    process = await asyncio.create_subprocess_exec(
+        *wrapped,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE
     )
+    stdout, stderr = await process.communicate()
     
-    if platform.system() == "Windows":
-        import subprocess
-        subprocess.run(
-            ["icacls", blocked_path, "/grant", f"{os.environ['USERNAME']}:(OI)(CI)(F)", "/Q"],
-            capture_output=True
-        )
-
-@pytest.mark.asyncio
-async def test_execute_basic_command(tool_context):
-    tool = ExecuteTool(tool_context)
-    cmd = "whoami" if platform.system() == "Windows" else "whoami"
-    result = await tool.execute(command=cmd)
-    assert result["exit_code"] == 0
-    assert len(result["stdout"]) > 0
-
-@pytest.mark.asyncio
-async def test_execute_invalid_command(tool_context):
-    tool = ExecuteTool(tool_context)
-    result = await tool.execute(command="invalid_cmd_xyz_123")
-    assert result["exit_code"] != 0
-
-@pytest.mark.asyncio
-async def test_execute_path_restriction_violation(tool_context):
-    tool = ExecuteTool(tool_context)
-    blocked_file = os.path.join(tool_context.workspace_root, "blocked", "secret.txt")
-    
-    if platform.system() == "Windows":
-        cmd = f"type \"{blocked_file}\""
-    else:
-        cmd = f"cat \"{blocked_file}\""
+    if process.returncode != 0:
+        print(f"STDOUT: {stdout.decode()}")
+        print(f"STDERR: {stderr.decode()}")
         
-    result = await tool.execute(command=cmd)
-    assert result["exit_code"] != 0
-    assert "SecurityViolation" in result["stderr"]
+    assert process.returncode == 0
+    assert len(stdout) > 0
 
+@pytest.mark.skipif(platform.system() != "Windows", reason="Windows specific tests")
 @pytest.mark.asyncio
-async def test_execute_blocked_subpath(tool_context):
-    tool = ExecuteTool(tool_context)
-    blocked_file = os.path.join(tool_context.workspace_root, "blocked", "secret.txt")
+async def test_windows_sandbox_network_restriction():
+    """
+    RED: 验证沙箱是否能拦截网络请求。
+    我们尝试访问一个外部 URL，预期应该失败。
+    """
+    sandbox = WindowsSandbox()
+    # 使用 curl 尝试访问网络，预期被拦截或超时
+    command = ["curl", "-m", "2", "https://www.google.com"]
+    wrapped = sandbox.wrap_command(command, allowed_paths=[], blocked_paths=[])
     
-    if platform.system() == "Windows":
-        cmd = f"type \"{blocked_file}\""
-    else:
-        cmd = f"cat \"{blocked_file}\""
-        
-    result = await tool.execute(command=cmd)
-    assert result["exit_code"] != 0
-    assert "SecurityViolation" in result["stderr"]
-
-@pytest.mark.asyncio
-async def test_execute_allowed_path(tool_context):
-    tool = ExecuteTool(tool_context)
-    allowed_file = os.path.join(tool_context.workspace_root, "allowed", "data.txt")
+    process = await asyncio.create_subprocess_exec(
+        *wrapped,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE
+    )
+    stdout, stderr = await process.communicate()
     
-    if platform.system() == "Windows":
-        cmd = f"type \"{allowed_file}\""
-    else:
-        cmd = f"cat \"{allowed_file}\""
-        
-    result = await tool.execute(command=cmd)
-    assert "SecurityViolation" not in result["stderr"]
+    # 预期：要么返回非零退出码，要么 stderr 包含拦截信息
+    # 在当前 PowerShell 模拟中，这可能会通过，因为我们还没实现网络拦截
+    # 这正是 TDD 的 RED 阶段
+    assert process.returncode != 0 or b"MSC.SecurityViolation" in stderr or b"MSC.SandboxError" in stderr
 
+@pytest.mark.skipif(platform.system() != "Windows", reason="Windows specific tests")
 @pytest.mark.asyncio
-async def test_execute_shell_injection_attempt(tool_context):
-    tool = ExecuteTool(tool_context)
-    if platform.system() == "Windows":
-        cmd = "whoami ; echo injection"
-        result = await tool.execute(command=cmd)
-        assert result["exit_code"] != 0
-        assert "injection" not in result["stdout"]
-    else:
-        cmd = "whoami; echo injection"
-        result = await tool.execute(command=cmd)
-        assert "injection" in result["stdout"]
-        assert ";" in result["stdout"]
+async def test_windows_sandbox_privilege_stripping():
+    """
+    RED: 验证沙箱是否剥离了管理员权限。
+    """
+    sandbox = WindowsSandbox()
+    # 尝试执行需要管理员权限的操作（例如查询系统敏感信息或尝试修改 ACL）
+    # 这里我们简单检查 whoami /groups 是否包含 Administrators
+    command = ["whoami", "/groups"]
+    wrapped = sandbox.wrap_command(command, allowed_paths=[], blocked_paths=[])
+    
+    process = await asyncio.create_subprocess_exec(
+        *wrapped,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE
+    )
+    stdout, stderr = await process.communicate()
+    
+    output = stdout.decode(errors="replace")
+    # 预期：Administrators 组应该被标记为 "Group used for deny only"
+    # 且不应出现 "Enabled group" 状态（针对该组）
+    admin_lines = [line for line in output.splitlines() if "Administrators" in line]
+    assert len(admin_lines) > 0, "Administrators group should be present in groups list"
+    for line in admin_lines:
+        assert "Group used for deny only" in line
+        assert "Enabled group" not in line

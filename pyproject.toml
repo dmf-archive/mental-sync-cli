@@ -15,6 +15,7 @@ dependencies = [
     "google-genai>=1.61.0",
     "httpx>=0.28.1",
     "types-pyyaml>=6.0.12.20250915",
+    "pywin32>=311",
 ]
 
 [tool.uv.workspace]
