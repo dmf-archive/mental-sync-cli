@@ -14,13 +14,16 @@ class GeminiAdapter:
         capabilities: list[str] | None = None,
         has_vision: bool = False,
         has_thinking: bool = False,
+        has_tools: bool = False,
         vertexai: bool = False,
+        pricing: dict[str, float] | None = None,
         **kwargs: Any
     ):
         self.name = name
         self.model_name = model
         self.capabilities = capabilities or []
-        self.model_info = MagicModelInfo(has_vision, has_thinking)
+        self.model_info = MagicModelInfo(has_vision, has_thinking, has_tools)
+        self._pricing = pricing or {"input_1m": 0.0, "output_1m": 0.0}
         
         http_options = types.HttpOptions(base_url=base_url) if base_url else None
         self.client = genai.Client(
@@ -30,7 +33,11 @@ class GeminiAdapter:
             **kwargs
         )
 
-    async def generate(self, prompt: str, image: str | None = None) -> str:
+    @property
+    def pricing(self) -> dict[str, float]:
+        return self._pricing
+
+    async def generate(self, prompt: str, image: str | None = None) -> tuple[str, list[Any], dict[str, Any]]:
         contents = []
         parts = [types.Part.from_text(text=prompt)]
         
@@ -53,12 +60,29 @@ class GeminiAdapter:
             )
         )
         
-        return response.text or ""
+        # 提取原生工具调用
+        tool_calls = []
+        if response.candidates:
+            for candidate in response.candidates:
+                if candidate.content and candidate.content.parts:
+                    for part in candidate.content.parts:
+                        if part.function_call:
+                            tool_calls.append({
+                                "name": part.function_call.name,
+                                "parameters": part.function_call.args
+                            })
+
+        usage = {
+            "input_tokens": response.usage_metadata.prompt_token_count if response.usage_metadata else 0,
+            "output_tokens": response.usage_metadata.candidates_token_count if response.usage_metadata else 0,
+        }
+        return response.text or "", tool_calls, usage
 
 class MagicModelInfo:
-    def __init__(self, has_vision: bool, has_thinking: bool):
+    def __init__(self, has_vision: bool, has_thinking: bool, has_tools: bool):
         self._has_vision = has_vision
         self._has_thinking = has_thinking
+        self._has_tools = has_tools
 
     @property
     def has_vision(self) -> bool:
@@ -67,3 +91,7 @@ class MagicModelInfo:
     @property
     def has_thinking(self) -> bool:
         return self._has_thinking
+
+    @property
+    def has_tools(self) -> bool:
+        return self._has_tools

@@ -13,6 +13,7 @@ class OllamaAdapter(OpenAIAdapter):
         capabilities: list[str] | None = None,
         has_vision: bool = False,
         has_thinking: bool = False,
+        has_tools: bool = False,
         **kwargs: Any
     ):
         actual_base_url = base_url or "http://localhost:11434/v1"
@@ -25,5 +26,6 @@ class OllamaAdapter(OpenAIAdapter):
             capabilities=capabilities,
             has_vision=has_vision,
             has_thinking=has_thinking,
+            has_tools=has_tools,
             **kwargs
         )

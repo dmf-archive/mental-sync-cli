@@ -68,4 +68,4 @@ Interface 层必须提供任务管理器视图，支持：
 ## 5. 错误处理与清理
 
 - **孤儿进程保护**: 若 Main Agent 崩溃，OG 必须负责清理所有派生的 subagent 进程。
-- **结果回传**: subagent 完成任务后，通过内部 IPC（函数返回）将结果同步给 Main Agent。
+- **结果回传**: subagent 完成任务后，必须调用 `complete_task` 工具。该工具会自动向父代理发送 `task_result` 消息，并终止子代理的执行循环。

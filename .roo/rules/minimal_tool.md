@@ -17,6 +17,7 @@
 | `model_switch(model_name(str))` | 内置 | PFMS 路由入口，Main Agent自我插拔 |
 | `create_agent(task_description(str);model_name(str);require_caps(list);require_thinking(bool);shared_memory(bool);sandbox_config(dict))` | 内置 | PFMS 路由入口；连接 Main Agent 与 subagent 生态 |
 | `ask_agent(agent_id(str);message(str);priority(str))` | 内置 | 跨代理通信接口；支持 standard/high 优先级消息传递。`agent_id=0` 指向 Main Agent。 |
+| `complete_task(summary(str))` | 内置 | 显式任务完成接口；自动向父代理汇报结果并终止当前 Session 循环。 |
 | `memory(action(str);message(str);key(str))` | 内置 | Anamnesis 声明式接口；Agent 自我记忆的 CRUD |
 
 ## 明确排除的工具

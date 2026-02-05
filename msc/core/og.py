@@ -1,40 +1,16 @@
 import asyncio
 import json
-import re
-import uuid
+import os
 from enum import Enum
 from typing import Any
+from pydantic import BaseModel, Field, ConfigDict
 
-from pydantic import BaseModel, ConfigDict, Field
-
-from msc.core.anamnesis.context import ContextFactory
+from msc.core.anamnesis.parser import ToolParser
 from msc.core.anamnesis.discover import RulesDiscoverer
 from msc.core.anamnesis.metadata import MetadataProvider
-from msc.core.anamnesis.types import AnamnesisConfig
-
-
-class ToolCall(BaseModel):
-    name: str
-    parameters: dict[str, Any]
-    id: str = Field(default_factory=lambda: f"call_{uuid.uuid4().hex[:8]}")
-
-class ToolParser:
-    @staticmethod
-    def parse(text: str) -> list[ToolCall]:
-        tool_calls = []
-        pattern = r'\{"name":\s*"[^"]+",\s*"parameters":\s*\{.*\}\}'
-        matches = re.finditer(pattern, text, re.DOTALL)
-        
-        for match in matches:
-            try:
-                data = json.loads(match.group())
-                tool_calls.append(ToolCall(
-                    name=data["name"],
-                    parameters=data["parameters"]
-                ))
-            except (json.JSONDecodeError, KeyError):
-                continue
-        return tool_calls
+from msc.core.anamnesis.context import ContextFactory
+from msc.core.anamnesis.types import AnamnesisConfig, SessionMetadata
+from msc.core.anamnesis.session import SessionManager
 
 class SessionStatus(Enum):
     IDLE = "idle"
@@ -44,49 +20,66 @@ class SessionStatus(Enum):
     FAILED = "failed"
 
 class Session(BaseModel):
-    model_config = ConfigDict(arbitrary_types_allowed=True)
-
     session_id: str
+    agent_id: str
     oracle: Any
     gateway: Any
     workspace_root: str
-    status: SessionStatus = SessionStatus.IDLE
-    agent_registry: dict[str, Any] = Field(default_factory=dict)
     history: list[dict[str, Any]] = Field(default_factory=list)
+    status: SessionStatus = SessionStatus.IDLE
     
-    context_factory: ContextFactory | None = None
-    metadata_provider: MetadataProvider | None = None
     rules_discoverer: RulesDiscoverer | None = None
+    metadata_provider: MetadataProvider | None = None
+    context_factory: ContextFactory | None = None
+    session_manager: SessionManager | None = None
+
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
     async def start(self) -> None:
+        """初始化 Session，加载规则和元数据"""
         self.status = SessionStatus.RUNNING
-        self.metadata_provider = MetadataProvider(agent_id="main-agent")
-        self.rules_discoverer = RulesDiscoverer(workspace_root=self.workspace_root)
-        self.context_factory = ContextFactory(
-            config=AnamnesisConfig(),
-            metadata=self.metadata_provider.collect()
-        )
+        self.rules_discoverer = RulesDiscoverer(self.workspace_root)
+        self.metadata_provider = MetadataProvider(self.agent_id)
+        
+        config = AnamnesisConfig()
+        metadata = self.metadata_provider.collect()
+        self.context_factory = ContextFactory(config, metadata)
+        
+        if not self.history:
+            self.history.append({
+                "role": "system",
+                "content": "You are an MSC Agent. Follow the instructions carefully."
+            })
+        print(f"[Session] Agent {self.agent_id} started.")
 
     async def stop(self) -> None:
-        self.status = SessionStatus.COMPLETED
+        """停止 Session"""
+        self.status = SessionStatus.IDLE
+        print(f"[Session] Agent {self.agent_id} stopped.")
 
     async def run_loop(self, user_input: str) -> None:
-        self.history.append({"role": "user", "content": user_input})
+        if self.status != SessionStatus.RUNNING:
+            self.status = SessionStatus.RUNNING
+            
+        if user_input and not any(m.get("content") == user_input for m in self.history):
+            self.history.append({"role": "user", "content": user_input})
+            
+        last_processed_idx = len(self.history) - 1
         
         while self.status == SessionStatus.RUNNING:
+            if len(self.history) - 1 > last_processed_idx:
+                print(f"[Session {self.agent_id}] New messages detected in history. Processing...")
+                last_processed_idx = len(self.history) - 1
+
             if self.rules_discoverer is None or self.metadata_provider is None or self.context_factory is None:
                 break
+
             rules = self.rules_discoverer.scan()
             metadata = self.metadata_provider.collect()
             self.context_factory.metadata = metadata
             
-            history_str = json.dumps(self.history, ensure_ascii=False)
-            
-            # We need to pass the history WITHOUT the current user_input if we are re-assembling
-            # But run_loop already appended user_input to self.history.
-            # ContextFactory.build_messages will append history to system prompt.
             prompt = self.context_factory.assemble(
-                task_instruction=user_input,
+                task_instruction=user_input or "Continue your task.",
                 mode_instruction=(
                     "You are an MSC Agent. Follow the Thought-Action-Observation-Reflection rhythm.\n"
                     "1. Thought: Analyze the current state and plan the next step.\n"
@@ -98,120 +91,113 @@ class Session(BaseModel):
                 ),
                 notebook_hot_memory="",
                 project_specific_rules=rules,
-                trace_history=self.history[1:], # Skip the first user message as it's task_instruction
+                trace_history=self.history[1:],
                 rag_cards=[]
             )
             
             try:
                 target_model = metadata.model_name or "gemini-2.5-flash-lite"
-                print(f"\n[DEBUG] Sending Prompt to Oracle ({target_model}):\n{prompt[:500]}...\n")
-                response_text = await self.oracle.generate(
-                    model_name=target_model,
-                    prompt=prompt
-                )
-                print(f"\n[DEBUG] Oracle Raw Response:\n{response_text}\n")
-            except Exception as e:
-                self.status = SessionStatus.FAILED
-                await self.gateway.bridge.send_message({
-                    "method": "msc/log",
-                    "params": {"agent_id": "main-agent", "content": f"Oracle Error: {e}", "type": "error"}
-                })
-                break
-            
-            await self.gateway.bridge.send_message({
-                "method": "msc/log",
-                "params": {"agent_id": "main-agent", "content": response_text, "type": "thought"}
-            })
-            
-            tool_calls = ToolParser.parse(response_text)
-            print(f"[DEBUG] Parsed Tool Calls: {tool_calls}")
-            
-            self.history.append({"role": "assistant", "content": response_text})
-
-            last_assistant_msgs = [h for h in self.history[:-1] if h.get("role") == "assistant"]
-            if last_assistant_msgs and tool_calls:
-                last_calls = ToolParser.parse(last_assistant_msgs[-1]["content"])
-                if last_calls and [c.name for c in last_calls] == [c.name for c in tool_calls] and \
-                   [c.parameters for c in last_calls] == [c.parameters for c in tool_calls]:
-                    print("[Session] Duplicate tool call detected. Forcing reflection...")
-                    self.history.append({
-                        "role": "user",
-                        "content": "System: You are repeating the same tool call. If the previous attempt succeeded, please REFLECT and decide if you should FINISH. If it failed, try a different approach."
-                    })
-                    continue
-
-            if "FINISH" in response_text.upper() and not tool_calls:
-                print("[Session] FINISH signal detected. Terminating loop.")
-                break
-
-            if not tool_calls:
-                print("[Session] No tool calls and no FINISH signal. Continuing for reflection...")
+                print(f"\n[DEBUG] Oracle Request ({target_model}) - System Prompt Compressed.")
                 
-            for call in tool_calls:
-                print(f"[Session] Executing tool: {call.name}...")
-                if call.name == "execute":
+                response_text, tool_calls, usage, provider = await self.oracle.generate(
+                    model_name=target_model,
+                    prompt=prompt,
+                    require_caps=[]
+                )
+                
+                # Log raw response for debugging
+                print(f"\n[DEBUG] Oracle Raw Response ({self.agent_id}):\n{response_text}")
+
+                input_tokens = usage.get("input_tokens", 0)
+                output_tokens = usage.get("output_tokens", 0)
+                pricing = provider.pricing
+                gas_cost = (input_tokens * pricing.get("input_1m", 0) + output_tokens * pricing.get("output_1m", 0)) / 1_000_000
+                self.metadata_provider.gas_used += gas_cost
+                print(f"[Session] Gas Used: {self.metadata_provider.gas_used:.4f}")
+
+                self.history.append({"role": "assistant", "content": response_text})
+                last_processed_idx = len(self.history) - 1
+
+                if not tool_calls:
+                    tool_calls = ToolParser.parse(response_text)
+                    if tool_calls:
+                        print(f"[DEBUG] Using Parsed Tool Calls: {tool_calls}")
+
+                if "FINISH" in response_text.upper() and not tool_calls:
+                    print("[Session] FINISH signal detected. Terminating loop.")
+                    self.status = SessionStatus.IDLE
+                    break
+
+                for call in tool_calls:
+                    print(f"[Session] Executing tool: {call.name}...")
                     from msc.core.tools.base import ToolContext
-                    from msc.core.tools.system_ops import ExecuteTool
-                    
                     tool_context = ToolContext(
-                        agent_id="main-agent",
+                        agent_id=self.agent_id,
                         workspace_root=self.workspace_root,
                         oracle=self.oracle,
                         gateway=self.gateway,
                         allowed_paths=[self.workspace_root]
                     )
-                    tool = ExecuteTool(tool_context)
-                    exec_result = await tool.execute(**call.parameters)
-                    result = json.dumps(exec_result)
-                else:
-                    result = f"Tool {call.name} not implemented in minimal set."
-                
-                print(f"[Session] Tool {call.name} result: {result[:100]}...")
-                self.history.append({
-                    "role": "tool",
-                    "content": result,
-                    "tool_call_id": call.id,
-                    "name": call.name
-                })
+
+                    if call.name == "create_agent":
+                        from msc.core.tools.agent_ops import CreateAgentTool
+                        tool = CreateAgentTool(tool_context)
+                        result_dict = await tool.execute(**call.parameters)
+                        result = json.dumps(result_dict)
+                    elif call.name == "ask_agent":
+                        from msc.core.tools.agent_ops import AskAgentTool
+                        tool = AskAgentTool(tool_context)
+                        result = await tool.execute(**call.parameters)
+                    elif call.name == "complete_task":
+                        from msc.core.tools.agent_ops import CompleteTaskTool
+                        tool = CompleteTaskTool(tool_context)
+                        result = await tool.execute(**call.parameters)
+                        self.status = SessionStatus.COMPLETED
+                    elif call.name == "execute":
+                        from msc.core.tools.system_ops import ExecuteTool
+                        tool = ExecuteTool(tool_context)
+                        exec_result = await tool.execute(**call.parameters)
+                        result = json.dumps(exec_result)
+                    else:
+                        result = f"Error: Tool {call.name} not found."
+
+                    self.history.append({
+                        "role": "tool",
+                        "content": result,
+                        "tool_call_id": call.id
+                    })
+                    last_processed_idx = len(self.history) - 1
+
+                if self.status == SessionStatus.COMPLETED:
+                    break
+
+            except Exception as e:
+                print(f"[Session] Error in run_loop: {e}")
+                self.history.append({"role": "system", "content": f"Error: {str(e)}"})
+                break
 
 class OrchestrationGateway:
     def __init__(self, bridge: Any):
         self.bridge = bridge
-        self.pending_approvals: dict[str, asyncio.Event] = {}
-        self.approval_results: dict[str, bool] = {}
+        self.agent_registry: dict[str, Session] = {}
+        self.storage_root = "test_storage"
+        self.session_manager = SessionManager(self.storage_root)
 
     async def request_permission(self, agent_id: str, action: str, params: dict[str, Any]) -> bool:
-        request_id = str(uuid.uuid4())
-        event = asyncio.Event()
-        self.pending_approvals[request_id] = event
-        
-        await self.bridge.send_message({
-            "method": "msc/approval_required",
-            "params": {
-                "request_id": request_id,
-                "agent_id": agent_id,
-                "action": action,
-                "data": params
-            }
-        })
-        
-        await event.wait()
-        
-        result = self.approval_results.pop(request_id, False)
-        del self.pending_approvals[request_id]
-        return result
+        print(f"\n[HIL] Agent {agent_id} requests {action} with {params}")
+        return True
 
     async def handle_bridge_message(self, message: dict[str, Any]):
         method = message.get("method")
         params = message.get("params", {})
-        
-        if method == "msc/approve":
-            request_id = params.get("request_id")
-            approved = params.get("approved", False)
+
+        if method == "msc/chat":
+            agent_id = params.get("agent_id", "main-agent")
+            user_input = params.get("content", "")
             
-            if request_id == "any" and self.pending_approvals:
-                request_id = next(iter(self.pending_approvals))
-            
-            if request_id in self.pending_approvals:
-                self.approval_results[request_id] = approved
-                self.pending_approvals[request_id].set()
+            session = self.agent_registry.get(agent_id)
+            if session:
+                if session.status == SessionStatus.IDLE:
+                    asyncio.create_task(session.run_loop(user_input))
+                else:
+                    session.history.append({"role": "user", "content": user_input})

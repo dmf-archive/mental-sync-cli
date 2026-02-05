@@ -58,7 +58,7 @@ providers:
         name: "claude-3.5-sonnet"        # 与上方同名，实现跨 Provider 负载均衡
         context_window: 200000
         thinking: "high"
-        multi_model_input: [image]       # 多模态支持：image, voice, video (取决于 Provider+Model)
+        multi_model_input: [image, tool] # 能力支持：image, voice, video, tool (原生工具调用)
         income: 0                        # 自动从 OpenRouter API 刷新
         outcome: 0                       # 自动从 OpenRouter API 刷新
         last_latency: 0.82
@@ -77,6 +77,6 @@ providers:
 
 | 任务难度 | 推荐逻辑模型 | 理由 |
 | :--- | :--- | :--- |
-| 复杂架构设计 | `gpt-5.2-codex` | 高逻辑一致性，强代码生成能力 |
-| 简单文件读写 | `deepseek-v3.2` | 低延迟，高性价比 |
+| 复杂架构设计 | `gpt-5.2-codex` | 高逻辑一致性，强代码生成能力，支持原生 `tool` |
+| 简单文件读写 | `deepseek-v3.2` | 低延迟，高性价比，需 `OG` 文本解析兜底 |
 | 敏感凭证处理 | `any-model` | 路由至受信任的 Green TEA 专用 Provider |

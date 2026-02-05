@@ -19,7 +19,7 @@
 ### 1.3 基础工具集 (Minimal Tool Set)
 
 - [x] **Execute**: 支持沙箱化执行系统命令 (`msc/core/tools/system_ops.py`)。
-- [-] **Create Agent**: 已实现初始化与沙箱指令封装，但真正的进程派生逻辑仍在占位阶段 (`msc/core/tools/agent_ops.py`)。
+- [x] **Create Agent**: 已实现基于协程上下文的子代理派生与消息传递逻辑 (`msc/core/og.py`, `msc/core/tools/agent_ops.py`)。
 - [ ] **Write/Diff**: (待增强) 实现原子写入与备份机制。
 
 ---
@@ -41,6 +41,7 @@
 ### 2.3 认知增强 (Cognitive Enhancement)
 
 - [x] **Lite RAG**: 已实现基于启发式关键词提取的知识卡片检索机制 (`msc/core/anamnesis/rag.py`)。
+- [x] **Gas Metering**: 已在 `OG` 层级实现基础的 Gas 计费与元数据追踪逻辑 (`msc/core/og.py`, `msc/core/anamnesis/metadata.py`)。
 - [ ] **Organizer Agent**: 实现专门用于“记忆蒸馏”的特殊 Sub-agent。
 
 ---
@@ -49,7 +50,7 @@
 
 ### 3.1 叙事集成 (Narrative Integration)
 
-- [ ] **Gas Metering**: 在 TUI 中实时显示 Token 消耗作为“Gas”。
+- [-] **Gas Metering**: 已实现后端逻辑，待在 TUI 中实时显示。
 
 ### 3.2 基础设施 (Infrastructure)
 
@@ -60,6 +61,9 @@
 
 ## 4. 待修复与优化 (Bugs & Debt)
 
+- [x] 修复 `agent_ops.py` 中的权限越权漏洞，强制执行 ACL 继承。
+- [x] 强化 `sandbox_launcher.py` 的 Windows 安全实现，移除 Breakaway 权限并增加 Job 限制。
+- [x] 实现真实的 Gas 计费逻辑，支持从 Oracle 适配器透传 usage 和 pricing 元数据。
 - [ ] 增强 `MetadataProvider` 在非 Windows 系统下的进程检测。
 - [ ] `AnthropicAdapter` 支持多图输入。
 - [ ] 优化 `ToolParser` 的正则匹配，提高对非标准 JSON 的容错性。

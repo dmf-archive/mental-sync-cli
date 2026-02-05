@@ -9,6 +9,8 @@ class ModelCapability(Protocol):
     def has_vision(self) -> bool: ...
     @property
     def has_thinking(self) -> bool: ...
+    @property
+    def has_tools(self) -> bool: ...
 
 @runtime_checkable
 class ChatProvider(Protocol):
@@ -20,7 +22,9 @@ class ChatProvider(Protocol):
     def capabilities(self) -> list[str]: ...
     @property
     def model_info(self) -> ModelCapability: ...
-    async def generate(self, prompt: str, image: str | None = None) -> str: ...
+    @property
+    def pricing(self) -> dict[str, float]: ...
+    async def generate(self, prompt: str, image: str | None = None) -> tuple[str, list[Any], dict[str, Any]]: ...
 
 class Oracle:
     def __init__(self, providers: list[ChatProvider]):
@@ -31,13 +35,13 @@ class Oracle:
         self.providers = providers
 
     async def generate(
-        self, 
-        model_name: str, 
-        prompt: str, 
+        self,
+        model_name: str,
+        prompt: str,
         image: str | None = None,
         require_caps: list[str] | None = None,
         require_thinking: bool = False
-    ) -> str:
+    ) -> tuple[str, list[Any], dict[str, Any], ChatProvider]:
         # 1. 筛选符合条件的候选者
         candidates = []
         for p in self.providers:
@@ -56,6 +60,10 @@ class Oracle:
             # 验证 CoT 支持
             if require_thinking and not p.model_info.has_thinking:
                 continue
+
+            # 验证原生工具调用支持
+            if "tool" in (require_caps or []) and not p.model_info.has_tools:
+                continue
                 
             candidates.append(p)
 
@@ -66,7 +74,8 @@ class Oracle:
         last_exception = None
         for provider in candidates:
             try:
-                return await provider.generate(prompt, image=image)
+                text, tool_calls, usage = await provider.generate(prompt, image=image)
+                return text, tool_calls, usage, provider
             except Exception as e:
                 last_exception = e
                 continue

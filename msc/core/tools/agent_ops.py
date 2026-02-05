@@ -1,4 +1,6 @@
+import asyncio
 import json
+import os
 import uuid
 from typing import Any
 
@@ -33,19 +35,42 @@ class CreateAgentTool(BaseTool):
         
         # 1. Register with Gateway if available
         if self.context.gateway:
-            # In a real MSC implementation, the gateway would spawn a new Session object
-            # which runs in its own coroutine or process.
-            pass
+            from msc.core.og import Session
+            sub_session = Session(
+                session_id=f"sub-{agent_id}",
+                agent_id=agent_id,
+                oracle=self.context.oracle,
+                gateway=self.context.gateway,
+                workspace_root=self.context.workspace_root
+            )
+            # Register and start the sub-agent session
+            self.context.gateway.agent_registry[agent_id] = sub_session
+            asyncio.create_task(sub_session.start())
+            # Start the cognitive loop for the sub-agent
+            asyncio.create_task(sub_session.run_loop(task_description))
 
         # 2. Prepare Sandbox Execution (Simulation of process-level isolation)
         # We use the sandbox provider to wrap a hypothetical 'msc-agent' command
         provider = get_sandbox_provider()
-        allowed_paths = [self.context.workspace_root]
-        blocked_paths = self.context.blocked_paths
         
-        # If sandbox_config provides specific paths, merge them
-        if "allowed_paths" in sandbox_config:
-            allowed_paths.extend(sandbox_config["allowed_paths"])
+        # Security: Enforce ACL Inheritance
+        # Sub-agent's allowed paths MUST be a subset of parent's allowed paths
+        parent_allowed = [os.path.normpath(os.path.abspath(p)).lower() for p in self.context.allowed_paths]
+        requested_allowed = sandbox_config.get("allowed_paths", [])
+        
+        final_allowed = [os.path.normpath(os.path.abspath(self.context.workspace_root))]
+        
+        for path in requested_allowed:
+            abs_path = os.path.normpath(os.path.abspath(path)).lower()
+            # Check if requested path is within any of the parent's allowed paths
+            if any(abs_path.startswith(p) for p in parent_allowed):
+                final_allowed.append(path)
+            else:
+                # Log security violation attempt but continue with restricted set
+                print(f"MSC.SecurityViolation: Sub-agent requested unauthorized path '{path}'. Denied.")
+
+        allowed_paths = list(set(final_allowed))
+        blocked_paths = self.context.blocked_paths
         
         # Construct the command that would start the sub-agent
         # In this prototype, we just return the metadata and the 'wrapped' command
@@ -72,5 +97,46 @@ class AskAgentTool(BaseTool):
 
     async def execute(self, **kwargs: Any) -> str:
         agent_id: str = kwargs["agent_id"]
+        message: str = kwargs["message"]
         priority: str = kwargs.get("priority", "standard")
-        return f"Message sent to {agent_id} with priority {priority}"
+        
+        if self.context.gateway and agent_id in self.context.gateway.agent_registry:
+            target_session = self.context.gateway.agent_registry[agent_id]
+            # Inject message into target agent's history
+            target_session.history.append({
+                "role": "user",
+                "content": f"Message from {self.context.agent_id}: {message}"
+            })
+            return f"Message delivered to {agent_id}."
+        
+        return f"Error: Agent {agent_id} not found in registry."
+
+class CompleteTaskArgs(BaseModel):
+    status: str = Field(..., description="Task status (success/failed)")
+    summary: str = Field(..., description="Brief summary of the task result")
+    data: dict[str, Any] = Field(default_factory=dict, description="Optional structured data")
+
+class CompleteTaskTool(BaseTool):
+    name = "complete_task"
+    description = "Explicitly complete the task and report result to parent agent."
+    args_schema = CompleteTaskArgs
+
+    async def execute(self, **kwargs: Any) -> str:
+        from msc.core.og import SessionStatus
+        status: str = kwargs.get("status", "success")
+        summary: str = kwargs.get("summary", "")
+        
+        # If this is a sub-agent, notify the parent (main-agent)
+        if self.context.gateway and self.context.agent_id != "main-agent":
+            main_session = self.context.gateway.agent_registry.get("main-agent")
+            if main_session:
+                # Use the standardized inter-agent message format
+                main_session.history.append({
+                    "role": "user",
+                    "content": f"Message from {self.context.agent_id}: Task completed.\nStatus: {status}\nSummary: {summary}"
+                })
+                # Wake up the main agent if it's waiting
+                if main_session.status == SessionStatus.IDLE:
+                    asyncio.create_task(main_session.run_loop(""))
+        
+        return f"Task completed with status: {status}. Summary: {summary}"

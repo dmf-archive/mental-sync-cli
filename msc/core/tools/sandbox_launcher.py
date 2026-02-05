@@ -2,6 +2,7 @@ import os
 import shlex
 import sys
 import uuid
+import json
 
 try:
     import win32api
@@ -60,10 +61,12 @@ def run_sandboxed(cmd_line: str, blocked_paths: list[str]):
         # 2. Create Job Object for resource and UI isolation
         h_job = win32job.CreateJobObject(None, "")
         info = win32job.QueryInformationJobObject(h_job, win32job.JobObjectExtendedLimitInformation)
+        # Security: Prevent breakaway from job to ensure child processes are also sandboxed
         info['BasicLimitInformation']['LimitFlags'] |= win32job.JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE
+        info['BasicLimitInformation']['LimitFlags'] |= win32job.JOB_OBJECT_LIMIT_DIE_ON_UNHANDLED_EXCEPTION
         win32job.SetInformationJobObject(h_job, win32job.JobObjectExtendedLimitInformation, info)
         
-        # UI Restrictions
+        # UI Restrictions: Prevent clipboard access, desktop switching, etc.
         win32job.SetInformationJobObject(h_job, win32job.JobObjectBasicUIRestrictions, {'UIRestrictionsClass': win32job.JOB_OBJECT_UILIMIT_ALL})
 
         # 3. Start Process
@@ -74,7 +77,8 @@ def run_sandboxed(cmd_line: str, blocked_paths: list[str]):
         si.hStdError = win32api.GetStdHandle(win32api.STD_ERROR_HANDLE)
         
         # Use CREATE_SUSPENDED so we can assign to job object before it runs
-        flags = win32process.CREATE_SUSPENDED | win32process.CREATE_BREAKAWAY_FROM_JOB | win32process.CREATE_NO_WINDOW
+        # Security: Removed CREATE_BREAKAWAY_FROM_JOB to prevent sandbox escape
+        flags = win32process.CREATE_SUSPENDED | win32process.CREATE_NO_WINDOW
         
         # Create environment block for the new process
         env = os.environ.copy()

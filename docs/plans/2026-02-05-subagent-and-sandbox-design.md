@@ -2,21 +2,49 @@
 
 > "Isolation is the first step towards sovereignty; logic is the final defense."
 
-## 1. Sub-agent 混合模式实现 (Hybrid Mode)
+## 1. Sub-agent 架构：协程上下文 + 进程沙箱工具
 
-### 1.1 逻辑隔离与身份绑定
+### 1.1 逻辑实体与协程绑定
 
-- **ContextVar 绑定**: 在 `msc/core/og.py` 的 `Session` 循环中，使用 `contextvars` 确保每个 subagent 协程拥有独立的 `agent_id` 上下文。
-- **Dispatcher 增强**: 修改 `ToolContext`，使其在初始化时自动从 `ContextVar` 获取 `agent_id`，防止 LLM 伪造。
+- **Agent as Coroutine**: 每个 Agent 实例（包括 Main Agent 和 subagents）在逻辑上表现为一个独立的协程 ID。
+- **Context 隔离**: 使用 `contextvars` 维护 `agent_id` 和 `ACL`。`ask_agent` 的本质是向目标协程的 `history` 中插入一条 `user` 消息，实现注意力的聚焦协同。
+- **无感 IPC**: 代理间的通信通过共享的 `Orchestration Gateway (OG)` 消息总线完成，避免复杂的双向异步网络通信，防止信息流弥散。
 
-### 1.2 进程派生 (Process Spawning)
+### 1.2 动态沙箱派生 (Just-in-Time Sandboxing)
 
-- **CreateAgentTool**:
-  - 不再仅仅返回一个 ID，而是实例化一个新的 `Session` 对象。
-  - 初始版本：在主进程内以协程方式运行新 `Session`。
-  - 进阶版本：通过 `multiprocessing` 或 `subprocess` 启动独立的 `msc-worker` 进程，通过 `Bridge` (JSON-RPC) 进行跨进程通信。
+- **工具即进程**: 只有在调用涉及外部环境的工具（如 `execute`, `write_file`）时，才根据当前 Agent 的 `ACL` 转换为 `NFSS` 隔离策略。
+- **原子化执行**: 每次工具调用派生一个受限的沙箱进程（Windows 下使用 `Restricted Token` + `Job Object`），执行完毕后立即销毁，确保环境的“逻辑根信任”。
 
-## 2. Windows 沙箱增强 (NFSS v2.0)
+## 2. Session 持久化：多线程独立记录 (Threaded Session)
+
+### 2.1 存储结构 (Filesystem Layout)
+
+Session 采用“一会话一目录”的结构，将主代理与子代理的对话线程物理隔离：
+
+```text
+storage/sessions/{timestamp}-{salt}/
+├── main-agent.json      # 主代理对话记录
+├── agent-sub-123.json   # 子代理 A 记录
+└── agent-sub-456.json   # 子代理 B 记录
+```
+
+### 2.2 文件格式 (JSON Schema)
+
+每个 `.json` 文件包含独立的元数据头和对话历史：
+
+- **Header**: 包含 `agent_id`, `model_name`, `gas_used`, `status`, `start_time`。
+- **History**: 标准的 `role/content` 消息数组。
+- **ACL 隔离**: ACL 表不随 Session 记录，由全局/项目配置动态注入。
+
+## 3. Gas 计费器 (Gas Metering)
+
+### 3.1 计费逻辑 (Centralized Metering)
+
+- **Provider 响应拦截**: `Oracle` 在返回 LLM 响应时，必须解析并返回 `usage` 数据（Input/Output/Thinking tokens）。
+- **Gas 转换**: `OG` 维护全局 `GasTracker`，根据 `config.yaml` 中的模型单价将 Token 转换为 `Gas` 消耗。
+- **持久化**: 实时更新 `$HOME/.msc/gas-vault.json`，支持会话级和全局级的 `Gas Limit` 拦截。
+
+## 4. Windows 沙箱增强 (NFSS v2.0)
 
 ### 2.1 Restricted Token (受限令牌)
 

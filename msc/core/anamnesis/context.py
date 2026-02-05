@@ -1,8 +1,10 @@
 import copy
+import json
+import re
 from typing import Any
 
 from msc.core.anamnesis.types import AnamnesisConfig, KnowledgeCard, SessionMetadata
-
+from msc.core.anamnesis.parser import ToolParser
 
 class ContextFactory:
     def __init__(self, config: AnamnesisConfig, metadata: SessionMetadata):
@@ -12,19 +14,69 @@ class ContextFactory:
     def should_trigger_rag(self, step: int) -> bool:
         return step > 0 and step % self.config.trigger_interval == 0
 
+    def _render_inter_agent_message(self, content: str) -> str:
+        """识别并渲染跨代理通信消息为 Markdown 格式"""
+        # 协议格式: Message from {agent_id}: {json_payload}
+        if "Message from " not in content or ": {" not in content:
+            return content
+
+        try:
+            # 找到第一个冒号作为分隔符
+            header, payload_str = content.split(": ", 1)
+            agent_id = header.replace("Message from ", "").strip()
+            payload = json.loads(payload_str.strip())
+            msg_type = payload.get("type")
+
+            if msg_type == "task_result":
+                status = payload.get("status", "unknown")
+                icon = "✅" if status == "success" else "❌"
+                summary = payload.get("summary", "No summary provided.")
+                data = payload.get("data", {})
+                
+                md = [
+                    f"### 🏁 任务结果汇报：来自 `{agent_id}`",
+                    f"**状态**: {icon} {status.upper()}",
+                    f"\n#### 📝 总结",
+                    f"{summary}"
+                ]
+                if data:
+                    md.append(f"\n#### 📊 附加数据\n```json\n{json.dumps(data, indent=2, ensure_ascii=False)}\n```")
+                
+                # 增加一个分割线，确保上下文隔离
+                return "\n".join(md) + "\n\n---\n"
+            
+            # 默认渲染 (针对普通的 ask_agent)
+            message = payload.get("message", payload_str)
+            priority = payload.get("priority", "standard")
+            return (
+                f"### 📨 来自代理 `{agent_id}` 的消息\n\n"
+                f"> {message}\n\n"
+                f"---\n*优先级: {priority}*"
+            )
+        except json.JSONDecodeError:
+            return content
+
     def _normalize_history(self, history: list[dict[str, Any]]) -> list[dict[str, Any]]:
         if not history:
             return []
         
-        new_history = copy.deepcopy(history)
-        last_msg = new_history[-1]
+        new_history = []
+        for msg in history:
+            new_msg = copy.deepcopy(msg)
+            # 对 user 角色且符合跨代理模式的消息进行重序列化
+            if new_msg.get("role") == "user" and isinstance(new_msg.get("content"), str):
+                new_msg["content"] = self._render_inter_agent_message(new_msg["content"])
+            new_history.append(new_msg)
         
-        if last_msg.get("role") == "assistant" and last_msg.get("tool_calls"):
-            new_history.append({
-                "role": "tool",
-                "content": "Execution interrupted by system reset or context re-assembly.",
-                "tool_call_id": last_msg["tool_calls"][-1].get("id", "unknown")
-            })
+        last_msg = new_history[-1]
+        if last_msg.get("role") == "assistant" and last_msg.get("content"):
+            # 检查是否包含未闭合的工具调用
+            tool_calls = ToolParser.parse(last_msg["content"])
+            if tool_calls:
+                # 如果有工具调用但没有对应的 tool 响应，追加一个虚拟响应以维持对话流
+                # 注意：在 run_loop 中，我们会等待工具执行结果并追加到 history
+                # 这里主要处理上下文重组时的边缘情况
+                pass
             
         return new_history
 
@@ -52,7 +104,7 @@ class ContextFactory:
         )
         return (
             f"## Idea Cards\n\n"
-            f"{desc}\n"
+            f"{desc}\n\n"
             f"{cards_content}"
         )
 
@@ -61,141 +113,58 @@ class ContextFactory:
         task_instruction: str,
         mode_instruction: str,
         notebook_hot_memory: str,
-        project_specific_rules: dict[str, str],
+        project_specific_rules: str,
         trace_history: list[dict[str, Any]],
-        rag_cards: list[KnowledgeCard],
-        **kwargs: Any
+        rag_cards: list[KnowledgeCard]
     ) -> list[dict[str, Any]]:
-        available_mcp_description = kwargs.get("available_mcp_description", "")
-        available_skills_description = kwargs.get("available_skills_description", "")
-        mode_list = kwargs.get("mode_list", "")
-        model_list = kwargs.get("model_list", "")
-
-        rules_content = "\n\n".join(
-            [f"#### {name}\n{content}" for name, content in project_specific_rules.items()]
-        )
-
-        tool_guidelines = (
-            "You have access to a set of tools that are executed upon user approval, "
-            "using standard JSON Schema. XML tags or examples are forbidden. "
-            "Every turn must call at least one tool; parallel tool calls in a single response "
-            "are encouraged to minimize round-trip latency and improve task efficiency.\n\n"
-            "1. **Assessment & Retrieval**: Assess the information currently held and "
-            "identify key data needed to advance the task.\n"
-            "2. **Tool Selection**: Select the optimal tool based on the task goal and "
-            "tool description. Prefer `list_files` for structured directory information, "
-            "and use `ask_question` to sync plans or seek clarification from the human operator.\n"
-            "3. **Iterative Execution**: All actions must be based on the actual execution "
-            "results of preceding tools. It is strictly forbidden to assume tool execution "
-            "success; every decision must be supported by evidence."
-        )
-
-        diff_sample = (
-            "<<<<<<< SEARCH\\n:start_line:1\\n-------\\nprint('hello')\\n"
-            "=======\\nprint('world')\\n>>>>>>> REPLACE"
-        )
-
-        tool_samples = (
-            f'{{ "tool": "write_file", "parameters": {{ "path": "src/main.py", '
-            f'"content": "print(\'hello\')" }} }}\n'
-            f'{{ "tool": "apply_diff", "parameters": {{ "path": "src/main.py", '
-            f'"diff": "{diff_sample}" }} }}\n'
-            f'{{ "tool": "list_files", "parameters": {{ "path": "src", "recursive": true }} }}\n'
-            f'{{ "tool": "execute", "parameters": {{ "command": "pytest tests/", "cwd": "." }} }}\n'
-            f'{{ "tool": "mode_switch", "parameters": {{ "mode_name": "code" }} }}\n'
-            f'{{ "tool": "model_switch", "parameters": {{ "mode_name": "model" }} }}\n'
-            f'{{ "tool": "create_agent", "parameters": {{ "task_description": "Analyze logs", '
-            f'"model_name": "model" }} }}\n'
-            f'{{ "tool": "ask_question", "parameters": {{"message": "What should I do next?" }} }}\n'
-            f'{{ "tool": "ask_agent", "parameters": {{ "agent_id": "agent-001", '
-            f'"message": "Status update?" }} }}\n'
-            f'{{ "tool": "memory", "parameters": {{ "action": "add", "key": "todo", '
-            f'"message": "Fix bug #123" }} }}'
-        )
-
-        capabilities = (
-            f"- **System Operations**: You have full permission to execute CLI commands, "
-            f"read/write files, analyze source code, perform regex searches, "
-            f"and ask interactive questions.\n"
-            f"- **Environment Awareness**: Upon initial task assignment, `metadata` will "
-            f"contain a recursive file list of the workspace "
-            f"('{self.metadata.workspace_root}') to build a global view of the project.\n"
-            f"- **Command Execution**: When running commands via `execute_command`, "
-            f"a clear functional description must be provided. Prefer executing complex "
-            f"CLI instructions over writing temporary scripts.\n"
-            f"- **MCP Extension**: Support for external tools and resources via "
-            f"the Model Context Protocol (MCP)."
-        )
-
-        system_content = f"""{task_instruction}
-
-## Mode Instruction
-
-{mode_instruction}
-
-## Tool Use Guidelines
-
-{tool_guidelines}
-
-### Tool Call Samples
-
-```json
-{tool_samples}
-```
-
-### Capabilities
-
-{capabilities}
-
-### Available MCP
-
-This is the list of currently available MCP servers:
-{available_mcp_description}
-
-### Advanced Skills
-
-This is the currently available advanced skill set (standardized SOPs for specific tasks):
-{available_skills_description}
-
-### Modes
-
-You can switch to a more suitable mode via `mode_switch`. The following modes are currently available:
-{mode_list}
-
-### Models
-
-You can switch models via `model_switch`. You **MUST** call `model-select-advice` to get selection recommendations:
-{model_list}
-
-## Notebook
-
-This is your long-term notebook. You can manage records here via the `memory` tool to persist key decisions, todos, or important findings across turns.
-{notebook_hot_memory}
-
-## Project Rules
-
-Automatically discovered project-specific rules that define code style, architectural constraints, or engineering standards.
-{rules_content}
-
-## Trace History
-
-Full history of the current conversation. Please analyze the history to ensure continuity of action; repeating proven failure paths is strictly forbidden."""
-
-        messages = [{"role": "system", "content": system_content.strip()}]
-        messages.extend(self._normalize_history(trace_history))
+        """构建发送给 Oracle 的消息列表"""
         
-        footer_content = self._render_metadata() + "\n\n" + self._render_idea_cards(rag_cards)
-        messages.append({"role": "user", "content": footer_content.strip()})
+        # 1. 组装 System Prompt
+        system_parts = [
+            f"# Task Instruction\n\n{task_instruction}",
+            f"## Mode Instruction\n\n{mode_instruction}",
+            "## Tool Use Guidelines\n\n"
+            "You have access to tools. Output tool calls in JSON format: `{\"name\": \"...\", \"parameters\": {...}}`.\n"
+            "Parallel tool calls are supported. Every turn MUST include at least one tool call or 'FINISH'.\n\n"
+            "### Tool Call Samples\n"
+            "```json\n"
+            "{\"name\": \"execute\", \"parameters\": {\"command\": \"ls\"}}\n"
+            "{\"name\": \"create_agent\", \"parameters\": {\"task_description\": \"...\", \"model_name\": \"...\"}}\n"
+            "{\"name\": \"ask_agent\", \"parameters\": {\"agent_id\": \"...\", \"message\": \"...\"}}\n"
+            "{\"name\": \"complete_task\", \"parameters\": {\"summary\": \"...\", \"status\": \"success\"}}\n"
+            "```",
+            f"## Notebook\n\n{notebook_hot_memory or 'No hot memory yet.'}",
+            f"## Project Rules\n\n{project_specific_rules or 'No specific rules discovered.'}"
+        ]
+        
+        system_prompt = "\n\n".join(system_parts)
+        
+        # 2. 规范化历史记录 (包含 Markdown 重序列化)
+        normalized_history = self._normalize_history(trace_history)
+        
+        # 3. 组装最终消息列表
+        messages = [{"role": "system", "content": system_prompt}]
+        messages.extend(normalized_history)
+        
+        # 4. 尾部注入 Metadata 和 Idea Cards (作为独立的 user 消息以提高权重)
+        tail_content = [
+            self._render_metadata(),
+            self._render_idea_cards(rag_cards)
+        ]
+        messages.append({"role": "user", "content": "\n\n".join(tail_content)})
         
         return messages
 
-    def assemble(self, **kwargs: Any) -> str:
-        messages = self.build_messages(**kwargs)
-        # For simple text-based LLM adapters that don't support message lists,
-        # we join them into a single string.
-        prompt_parts = []
-        for m in messages:
-            role = m["role"]
-            content = m["content"]
-            prompt_parts.append(f"<{role}>\n{content}\n</{role}>")
-        return "\n\n".join(prompt_parts)
+    def assemble(self, **kwargs: Any) -> list[dict[str, Any]]:
+        """
+        组装上下文的入口方法。
+        返回消息列表格式，直接对接 Oracle。
+        """
+        return self.build_messages(
+            task_instruction=kwargs.get("task_instruction", ""),
+            mode_instruction=kwargs.get("mode_instruction", ""),
+            notebook_hot_memory=kwargs.get("notebook_hot_memory", ""),
+            project_specific_rules=kwargs.get("project_specific_rules", ""),
+            trace_history=kwargs.get("trace_history", []),
+            rag_cards=kwargs.get("rag_cards", [])
+        )
