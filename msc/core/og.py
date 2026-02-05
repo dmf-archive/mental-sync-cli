@@ -11,6 +11,8 @@ from msc.core.anamnesis.metadata import MetadataProvider
 from msc.core.anamnesis.context import ContextFactory
 from msc.core.anamnesis.types import AnamnesisConfig, SessionMetadata
 from msc.core.anamnesis.session import SessionManager
+from msc.core.tools.dispatcher import ToolDispatcher
+from msc.core.tools.base import ToolContext
 
 class SessionStatus(Enum):
     IDLE = "idle"
@@ -32,6 +34,7 @@ class Session(BaseModel):
     metadata_provider: MetadataProvider | None = None
     context_factory: ContextFactory | None = None
     session_manager: SessionManager | None = None
+    available_tools: list[str] = Field(default_factory=ToolDispatcher.get_available_tools)
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
@@ -78,16 +81,15 @@ class Session(BaseModel):
             metadata = self.metadata_provider.collect()
             self.context_factory.metadata = metadata
             
-            prompt = self.context_factory.assemble(
+            # 使用 ContextFactory 组装消息列表
+            messages = self.context_factory.assemble(
                 task_instruction=user_input or "Continue your task.",
                 mode_instruction=(
                     "You are an MSC Agent. Follow the Thought-Action-Observation-Reflection rhythm.\n"
                     "1. Thought: Analyze the current state and plan the next step.\n"
                     "2. Action: Call a tool if necessary.\n"
                     "3. Observation: Review the tool output (provided in history).\n"
-                    "4. Reflection: Assess if the goal is met. If yes, output 'FINISH'.\n\n"
-                    "Output tool calls in JSON format: {\"name\": \"...\", \"parameters\": {...}}.\n"
-                    "If you have completed the task, you MUST output 'FINISH' to terminate the loop."
+                    "4. Reflection: Assess if the goal is met. If yes, use 'complete_task' to finish."
                 ),
                 notebook_hot_memory="",
                 project_specific_rules=rules,
@@ -101,11 +103,10 @@ class Session(BaseModel):
                 
                 response_text, tool_calls, usage, provider = await self.oracle.generate(
                     model_name=target_model,
-                    prompt=prompt,
+                    prompt=messages, # 直接传递消息列表
                     require_caps=[]
                 )
                 
-                # Log raw response for debugging
                 print(f"\n[DEBUG] Oracle Raw Response ({self.agent_id}):\n{response_text}")
 
                 input_tokens = usage.get("input_tokens", 0)
@@ -123,14 +124,8 @@ class Session(BaseModel):
                     if tool_calls:
                         print(f"[DEBUG] Using Parsed Tool Calls: {tool_calls}")
 
-                if "FINISH" in response_text.upper() and not tool_calls:
-                    print("[Session] FINISH signal detected. Terminating loop.")
-                    self.status = SessionStatus.IDLE
-                    break
-
                 for call in tool_calls:
                     print(f"[Session] Executing tool: {call.name}...")
-                    from msc.core.tools.base import ToolContext
                     tool_context = ToolContext(
                         agent_id=self.agent_id,
                         workspace_root=self.workspace_root,
@@ -139,27 +134,10 @@ class Session(BaseModel):
                         allowed_paths=[self.workspace_root]
                     )
 
-                    if call.name == "create_agent":
-                        from msc.core.tools.agent_ops import CreateAgentTool
-                        tool = CreateAgentTool(tool_context)
-                        result_dict = await tool.execute(**call.parameters)
-                        result = json.dumps(result_dict)
-                    elif call.name == "ask_agent":
-                        from msc.core.tools.agent_ops import AskAgentTool
-                        tool = AskAgentTool(tool_context)
-                        result = await tool.execute(**call.parameters)
-                    elif call.name == "complete_task":
-                        from msc.core.tools.agent_ops import CompleteTaskTool
-                        tool = CompleteTaskTool(tool_context)
-                        result = await tool.execute(**call.parameters)
+                    result = await ToolDispatcher.dispatch(tool_context, call.name, call.parameters)
+                    
+                    if call.name == "complete_task":
                         self.status = SessionStatus.COMPLETED
-                    elif call.name == "execute":
-                        from msc.core.tools.system_ops import ExecuteTool
-                        tool = ExecuteTool(tool_context)
-                        exec_result = await tool.execute(**call.parameters)
-                        result = json.dumps(exec_result)
-                    else:
-                        result = f"Error: Tool {call.name} not found."
 
                     self.history.append({
                         "role": "tool",
@@ -169,6 +147,12 @@ class Session(BaseModel):
                     last_processed_idx = len(self.history) - 1
 
                 if self.status == SessionStatus.COMPLETED:
+                    break
+                
+                # 如果没有工具调用且没有完成，进入 IDLE 等待唤醒
+                if not tool_calls:
+                    print(f"[Session {self.agent_id}] No actions. Entering IDLE.")
+                    self.status = SessionStatus.IDLE
                     break
 
             except Exception as e:

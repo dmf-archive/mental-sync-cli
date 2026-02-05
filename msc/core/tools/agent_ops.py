@@ -112,7 +112,6 @@ class AskAgentTool(BaseTool):
         return f"Error: Agent {agent_id} not found in registry."
 
 class CompleteTaskArgs(BaseModel):
-    status: str = Field(..., description="Task status (success/failed)")
     summary: str = Field(..., description="Brief summary of the task result")
     data: dict[str, Any] = Field(default_factory=dict, description="Optional structured data")
 
@@ -123,20 +122,26 @@ class CompleteTaskTool(BaseTool):
 
     async def execute(self, **kwargs: Any) -> str:
         from msc.core.og import SessionStatus
-        status: str = kwargs.get("status", "success")
         summary: str = kwargs.get("summary", "")
+        data: dict[str, Any] = kwargs.get("data", {})
         
         # If this is a sub-agent, notify the parent (main-agent)
         if self.context.gateway and self.context.agent_id != "main-agent":
             main_session = self.context.gateway.agent_registry.get("main-agent")
             if main_session:
                 # Use the standardized inter-agent message format
+                payload = {
+                    "type": "task_result",
+                    "status": "success",
+                    "summary": summary,
+                    "data": data
+                }
                 main_session.history.append({
                     "role": "user",
-                    "content": f"Message from {self.context.agent_id}: Task completed.\nStatus: {status}\nSummary: {summary}"
+                    "content": f"Message from {self.context.agent_id}: {json.dumps(payload)}"
                 })
                 # Wake up the main agent if it's waiting
                 if main_session.status == SessionStatus.IDLE:
                     asyncio.create_task(main_session.run_loop(""))
         
-        return f"Task completed with status: {status}. Summary: {summary}"
+        return f"Task completed. Summary: {summary}"

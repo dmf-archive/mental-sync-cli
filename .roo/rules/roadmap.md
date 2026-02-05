@@ -7,7 +7,10 @@
 ### 1.1 核心架构 (Core Architecture)
 
 - [x] **Orchestration Gateway (OG)**: 实现基础的 Session 管理与认知循环 (`msc/core/og.py`)。
-- [x] **Anamnesis (Context Manager)**: 实现动态上下文组装、Metadata 收集与 Rules 发现 (`msc/core/anamnesis/`)。
+  - **DEBT**: `og.py` 仍残留硬编码的 `mode_instruction`，需迁移至 `context.py`。
+- [-] **Anamnesis (Context Manager)**: 实现动态上下文组装、Metadata 收集与 Rules 发现 (`msc/core/anamnesis/`)。
+  - **CONFLICT**: `context.py` 中的工具示例与 `agent_ops.py` 中的实现不一致（如 `complete_task` 的 `status` 参数）。
+  - **DEBT**: `Tool Use Guidelines` 仍硬编码在 `context.py` 中，未实现动态发现。
 - [x] **Oracle (PFMS)**: 实现跨 Provider 的逻辑模型路由与故障转移 (`msc/oracle/`)。
 
 ### 1.2 安全沙箱 (NFSS v2.0)
@@ -20,7 +23,8 @@
 
 - [x] **Execute**: 支持沙箱化执行系统命令 (`msc/core/tools/system_ops.py`)。
 - [x] **Create Agent**: 已实现基于协程上下文的子代理派生与消息传递逻辑 (`msc/core/og.py`, `msc/core/tools/agent_ops.py`)。
-- [ ] **Write/Diff**: (待增强) 实现原子写入与备份机制。
+- [-] **Write/Diff**: 实现基础写入与 SEARCH/REPLACE 修改 (`msc/core/tools/file_ops.py`)。
+  - **DEBT**: `apply_diff` 解析逻辑过于简陋，缺乏原子性保证和备份机制。
 
 ---
 
@@ -31,6 +35,7 @@
 - [ ] **Atomic File Ops**: 完善 `write_file` 与 `apply_diff`，集成自动备份与回滚。
 - [ ] **Structured List**: 实现 `list_files` 的高性能 JSON 输出，支持大规模目录树。
 - [ ] **Memory CRUD**: 实现 `memory` 工具，允许 Agent 声明式管理其 Notebook (Hot Memory)。
+  - **STATUS**: 目前为模拟实现，需对接 `.msc/notebook/`。单元测试脚本可以使用path hook指向 `.\tests\mock-workspace\.msc`
 
 ### 2.2 跨平台沙箱 (Cross-platform NFSS)
 
@@ -64,6 +69,8 @@
 - [x] 修复 `agent_ops.py` 中的权限越权漏洞，强制执行 ACL 继承。
 - [x] 强化 `sandbox_launcher.py` 的 Windows 安全实现，移除 Breakaway 权限并增加 Job 限制。
 - [x] 实现真实的 Gas 计费逻辑，支持从 Oracle 适配器透传 usage 和 pricing 元数据。
+- [ ] **URGENT**: 彻底移除 `FINISH` 协议，强制使用 `complete_task`。
+- [ ] **URGENT**: 统一 `complete_task` 参数，移除 `status`，仅保留 `summary`。
 - [ ] 增强 `MetadataProvider` 在非 Windows 系统下的进程检测。
 - [ ] `AnthropicAdapter` 支持多图输入。
 - [ ] 优化 `ToolParser` 的正则匹配，提高对非标准 JSON 的容错性。

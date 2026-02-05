@@ -124,14 +124,15 @@ class ContextFactory:
             f"# Task Instruction\n\n{task_instruction}",
             f"## Mode Instruction\n\n{mode_instruction}",
             "## Tool Use Guidelines\n\n"
-            "You have access to tools. Output tool calls in JSON format: `{\"name\": \"...\", \"parameters\": {...}}`.\n"
-            "Parallel tool calls are supported. Every turn MUST include at least one tool call or 'FINISH'.\n\n"
+            "You have access to a set of tools that are executed upon the user's approval. "
+            "Output tool calls in JSON format: `{\"name\": \"...\", \"parameters\": {...}}`.\n"
+            "Parallel tool calls are supported. Every turn MUST include at least one tool call.\n"
+            "IMPORTANT: You MUST output the tool call JSON block. You may include thoughts before the JSON block, but the JSON block itself must be valid and complete.\n\n"
             "### Tool Call Samples\n"
             "```json\n"
-            "{\"name\": \"execute\", \"parameters\": {\"command\": \"ls\"}}\n"
-            "{\"name\": \"create_agent\", \"parameters\": {\"task_description\": \"...\", \"model_name\": \"...\"}}\n"
-            "{\"name\": \"ask_agent\", \"parameters\": {\"agent_id\": \"...\", \"message\": \"...\"}}\n"
-            "{\"name\": \"complete_task\", \"parameters\": {\"summary\": \"...\", \"status\": \"success\"}}\n"
+            "{\"name\": \"write_file\", \"parameters\": {\"path\": \"test.txt\", \"content\": \"hello\"}}\n"
+            "{\"name\": \"apply_diff\", \"parameters\": {\"path\": \"test.txt\", \"diff\": \"<<<<<<< SEARCH\\nhello\\n=======\\nworld\\n>>>>>>> REPLACE\"}}\n"
+            "{\"name\": \"complete_task\", \"parameters\": {\"summary\": \"Task completed successfully.\"}}\n"
             "```",
             f"## Notebook\n\n{notebook_hot_memory or 'No hot memory yet.'}",
             f"## Project Rules\n\n{project_specific_rules or 'No specific rules discovered.'}"
@@ -151,7 +152,12 @@ class ContextFactory:
             self._render_metadata(),
             self._render_idea_cards(rag_cards)
         ]
-        messages.append({"role": "user", "content": "\n\n".join(tail_content)})
+        
+        # 检查最后一条消息是否为 user，如果是则合并，否则追加
+        if messages and messages[-1]["role"] == "user":
+            messages[-1]["content"] += "\n\n" + "\n\n".join(tail_content)
+        else:
+            messages.append({"role": "user", "content": "\n\n".join(tail_content)})
         
         return messages
 
@@ -160,10 +166,22 @@ class ContextFactory:
         组装上下文的入口方法。
         返回消息列表格式，直接对接 Oracle。
         """
+        # 自动从文件加载 Notebook 内容
+        notebook_hot_memory = kwargs.get("notebook_hot_memory", "")
+        if not notebook_hot_memory:
+            import os
+            notebook_file = os.path.join(self.metadata.workspace_root, ".msc", "notebook", "memory-1.md")
+            if os.path.exists(notebook_file):
+                try:
+                    with open(notebook_file, "r", encoding="utf-8") as f:
+                        notebook_hot_memory = f.read()
+                except Exception:
+                    pass
+
         return self.build_messages(
             task_instruction=kwargs.get("task_instruction", ""),
             mode_instruction=kwargs.get("mode_instruction", ""),
-            notebook_hot_memory=kwargs.get("notebook_hot_memory", ""),
+            notebook_hot_memory=notebook_hot_memory,
             project_specific_rules=kwargs.get("project_specific_rules", ""),
             trace_history=kwargs.get("trace_history", []),
             rag_cards=kwargs.get("rag_cards", [])
