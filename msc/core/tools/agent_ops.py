@@ -100,6 +100,15 @@ class AskAgentTool(BaseTool):
         message: str = kwargs["message"]
         priority: str = kwargs.get("priority", "standard")
         
+        # 协议实现：若 agent_id 为 'human'，则挂起当前 Session
+        if agent_id.lower() == "human":
+            from msc.core.og import SessionStatus
+            if self.context.gateway:
+                session = self.context.gateway.agent_registry.get(self.context.agent_id)
+                if session:
+                    session.status = SessionStatus.IDLE
+            return "Message sent to Human. Session suspended until response."
+
         if self.context.gateway and agent_id in self.context.gateway.agent_registry:
             target_session = self.context.gateway.agent_registry[agent_id]
             # Inject message into target agent's history
@@ -107,6 +116,12 @@ class AskAgentTool(BaseTool):
                 "role": "user",
                 "content": f"Message from {self.context.agent_id}: {message}"
             })
+            
+            # 协议实现：若目标是 main-agent 且处于 IDLE，尝试唤醒它以处理异步结果
+            from msc.core.og import SessionStatus
+            if agent_id == "main-agent" and target_session.status == SessionStatus.IDLE:
+                asyncio.create_task(target_session.run_loop(""))
+
             return f"Message delivered to {agent_id}."
         
         return f"Error: Agent {agent_id} not found in registry."

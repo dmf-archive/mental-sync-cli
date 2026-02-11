@@ -32,7 +32,7 @@ def create_complex_mock_provider(
     mock.model_name = model_name
     mock.capabilities = caps
     mock.model_info = ModelCapability(has_vision=has_vision, has_thinking=has_thinking)
-    mock.generate = AsyncMock(return_value=response)
+    mock.generate = AsyncMock(return_value=(response, [], {"input_tokens": 1, "output_tokens": 1}))
     return mock
 
 # --- 3. 单元测试套件 ---
@@ -52,9 +52,9 @@ async def test_oracle_green_tea_routing():
     oracle = Oracle(providers=[p_official, p_local])
     
     # 请求需要 green-tea 能力的逻辑模型
-    response = await oracle.generate("claude-3.5-sonnet", "secret task", require_caps=["green-tea"])
-    
-    assert response == "Local Secure Response"
+    response_tuple = await oracle.generate("claude-3.5-sonnet", "secret task", require_caps=["green-tea"])
+
+    assert response_tuple[0] == "Local Secure Response"
     p_local.generate.assert_called_once()
     p_official.generate.assert_not_called()
 
@@ -101,9 +101,9 @@ async def test_oracle_cot_fallback():
     oracle = Oracle(providers=[p1, p2])
     
     # 请求需要 Thinking 的任务
-    response = await oracle.generate("model-x", "complex math", require_thinking=True)
-    
-    assert response == "CoT Response"
+    response_tuple = await oracle.generate("model-x", "complex math", require_thinking=True)
+
+    assert response_tuple[0] == "CoT Response"
     p2.generate.assert_called_once()
 
 @pytest.mark.asyncio
@@ -135,6 +135,40 @@ async def test_openrouter_pricing_refresh():
         # 验证价格转换 ($/1M)
         assert adapter.pricing["input_1m"] == 3.0
         assert adapter.pricing["output_1m"] == 15.0
+
+@pytest.mark.asyncio
+async def test_openrouter_generate_returns_tool_calls():
+    from msc.oracle.adapters.openrouter import OpenRouterAdapter
+    from msc.oracle.adapters.openai import OpenAIAdapter
+
+    adapter = OpenRouterAdapter(name="or", model="anthropic/claude-3.5-sonnet", api_key="sk-test")
+    mocked = ("hi", [{"name": "tool", "parameters": {}}], {"input_tokens": 1, "output_tokens": 1})
+
+    with patch.object(OpenAIAdapter, "generate", new_callable=AsyncMock) as mock_generate:
+        mock_generate.return_value = mocked
+        result = await adapter.generate("hi")
+
+    assert result == mocked
+
+
+@pytest.mark.asyncio
+async def test_openrouter_real_free_model():
+    """真实调用 OpenRouter 的 free 模型，验证返回结构完整"""
+    from msc.oracle.adapters.openrouter import OpenRouterAdapter
+
+    adapter = OpenRouterAdapter(
+        name="or",
+        model="openrouter/free",
+        api_key="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",
+    )
+    text, tool_calls, usage = await adapter.generate("Say hello")
+
+    assert isinstance(text, str)
+    assert isinstance(tool_calls, list)
+    assert isinstance(usage, dict)
+    assert "input_tokens" in usage
+    assert "output_tokens" in usage
+
 
 @pytest.mark.asyncio
 async def test_ollama_default_url():

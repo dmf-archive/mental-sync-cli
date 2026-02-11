@@ -16,7 +16,7 @@
 | `execute(command(str);cwd(str))` | 内置 | 系统默认shell的入口；通过提示词动态更新可用 CLI 工具 |
 | `model_switch(model_name(str))` | 内置 | PFMS 路由入口，Main Agent自我插拔 |
 | `create_agent(task_description(str);model_name(str);require_caps(list);require_thinking(bool);shared_memory(bool);sandbox_config(dict))` | 内置 | PFMS 路由入口；连接 Main Agent 与 subagent 生态 |
-| `ask_agent(agent_id(str);message(str);priority(str))` | 内置 | 跨代理通信接口；支持 standard/high 优先级消息传递。`agent_id=0` 指向 Main Agent。 |
+| `ask_agent(agent_id(str);message(str);priority(str))` | 内置 | 跨代理通信接口；支持 standard/high 优先级消息传递。`agent_id='main-agent'` 指向主代理。若 `agent_id='human'`，则向人类发送一条具有额外装饰的“question”（参考Roo code ask_followup_question）并挂起当前 Session 直到回复。 |
 | `complete_task(summary(str))` | 内置 | 显式任务完成接口；自动向父代理汇报结果并终止当前 Session 循环。 |
 | `memory(action(str);message(str);key(str))` | 内置 | Anamnesis 声明式接口；Agent 自我记忆的 CRUD |
 

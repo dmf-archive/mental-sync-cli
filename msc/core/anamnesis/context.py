@@ -16,44 +16,48 @@ class ContextFactory:
 
     def _render_inter_agent_message(self, content: str) -> str:
         """识别并渲染跨代理通信消息为 Markdown 格式"""
-        # 协议格式: Message from {agent_id}: {json_payload}
-        if "Message from " not in content or ": {" not in content:
+        # 协议格式: Message from {agent_id}: {payload}
+        if "Message from " not in content or ": " not in content:
             return content
 
         try:
             # 找到第一个冒号作为分隔符
             header, payload_str = content.split(": ", 1)
             agent_id = header.replace("Message from ", "").strip()
-            payload = json.loads(payload_str.strip())
-            msg_type = payload.get("type")
-
-            if msg_type == "task_result":
-                status = payload.get("status", "unknown")
-                icon = "✅" if status == "success" else "❌"
-                summary = payload.get("summary", "No summary provided.")
-                data = payload.get("data", {})
-                
-                md = [
-                    f"### 🏁 任务结果汇报：来自 `{agent_id}`",
-                    f"**状态**: {icon} {status.upper()}",
-                    f"\n#### 📝 总结",
-                    f"{summary}"
-                ]
-                if data:
-                    md.append(f"\n#### 📊 附加数据\n```json\n{json.dumps(data, indent=2, ensure_ascii=False)}\n```")
-                
-                # 增加一个分割线，确保上下文隔离
-                return "\n".join(md) + "\n\n---\n"
             
-            # 默认渲染 (针对普通的 ask_agent)
-            message = payload.get("message", payload_str)
-            priority = payload.get("priority", "standard")
+            # 尝试解析 JSON 负载
+            try:
+                payload = json.loads(payload_str.strip())
+                if isinstance(payload, dict) and payload.get("type") == "task_result":
+                    status = payload.get("status", "unknown")
+                    icon = "✅" if status == "success" else "❌"
+                    summary = payload.get("summary", "No summary provided.")
+                    data = payload.get("data", {})
+                    
+                    md = [
+                        f"### 🏁 任务结果汇报：来自 `{agent_id}`",
+                        f"**状态**: {icon} {status.upper()}",
+                        f"\n#### 📝 总结",
+                        f"{summary}"
+                    ]
+                    if data:
+                        md.append(f"\n#### 📊 附加数据\n```json\n{json.dumps(data, indent=2, ensure_ascii=False)}\n```")
+                    return "\n".join(md) + "\n\n---\n"
+                
+                # 如果是普通 JSON 消息
+                message = payload.get("message", payload_str) if isinstance(payload, dict) else payload_str
+                priority = payload.get("priority", "standard") if isinstance(payload, dict) else "standard"
+            except json.JSONDecodeError:
+                # 纯文本消息处理
+                message = payload_str.strip()
+                priority = "standard"
+
             return (
                 f"### 📨 来自代理 `{agent_id}` 的消息\n\n"
                 f"> {message}\n\n"
                 f"---\n*优先级: {priority}*"
             )
-        except json.JSONDecodeError:
+        except Exception:
             return content
 
     def _normalize_history(self, history: list[dict[str, Any]]) -> list[dict[str, Any]]:

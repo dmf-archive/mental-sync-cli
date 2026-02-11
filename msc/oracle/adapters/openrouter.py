@@ -52,15 +52,15 @@ class OpenRouterAdapter(OpenAIAdapter):
         except Exception:
             pass
 
-    async def generate(self, prompt: str, image: str | None = None) -> tuple[str, dict[str, Any]]:
+    async def generate(self, prompt: str, image: str | None = None) -> tuple[str, list[Any], dict[str, Any]]:
         # OpenRouter normalizes the schema to OpenAI format.
         # However, it also provides a 'generation' endpoint to get detailed cost.
         # For the standard chat completion, we use the base OpenAI logic.
-        text, usage = await super().generate(prompt, image=image)
+        text, tool_calls, usage = await super().generate(prompt, image=image)
         
         # OpenRouter specific: If the response includes 'usage' with 'cost', we should use it.
         # In our current OpenAIAdapter, we only extract tokens.
         # To get the real cost from OpenRouter, we'd ideally check the 'X-OpenRouter-Referrer'
         # or use their specific stats API.
         # For now, we ensure the usage dict is passed through.
-        return text, usage
+        return text, tool_calls, usage

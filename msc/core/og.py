@@ -146,14 +146,28 @@ class Session(BaseModel):
                     })
                     last_processed_idx = len(self.history) - 1
 
+                # 每次工具执行后尝试持久化
+                if self.gateway and self.gateway.session_manager:
+                    self.gateway.session_manager.save_session(
+                        self.session_id, self.metadata_provider.collect(), self.history
+                    )
+
                 if self.status == SessionStatus.COMPLETED:
                     break
                 
-                # 如果没有工具调用且没有完成，进入 IDLE 等待唤醒
+                # 协议引导：若无工具调用，引导 Agent 进入合法的挂起或等待状态
                 if not tool_calls:
-                    print(f"[Session {self.agent_id}] No actions. Entering IDLE.")
-                    self.status = SessionStatus.IDLE
-                    break
+                    guide_msg = (
+                        "Notice: You did not provide any tool calls. To maintain operational integrity, "
+                        "every turn must include an action. If you are waiting for a subagent or external event, "
+                        "you should either:\n"
+                        "1. Use 'ask_agent' with agent_id='human' to report your status and suspend the session.\n"
+                        "2. Use 'execute' with a wait command (e.g., 'timeout /t 30' or 'Start-Sleep -s 30') to poll later.\n"
+                        "Please choose an appropriate tool to proceed."
+                    )
+                    print(f"[Session {self.agent_id}] No tool calls. Injecting protocol guidance.")
+                    self.history.append({"role": "user", "content": guide_msg})
+                    continue
 
             except Exception as e:
                 print(f"[Session] Error in run_loop: {e}")
